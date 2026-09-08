@@ -3,7 +3,7 @@ using System.IO.Compression;
 
 namespace AzerothQuesting.Companion;
 
-internal sealed record AddonInstallResult(string Version, int MigratedSavedVariableFiles, string BackupDirectory);
+internal sealed record AddonInstallResult(string Version, string BackupDirectory);
 
 internal sealed class AddonService
 {
@@ -105,12 +105,7 @@ internal sealed class AddonService
             var addOnsPath = GetAddOnsPath(retailPath);
             Directory.CreateDirectory(addOnsPath);
             var targetAddon = Path.Combine(addOnsPath, "AzerothQuesting");
-            var legacyAddon = Path.Combine(addOnsPath, "ZoneQuestGuide");
-
             BackupDirectoryIfPresent(targetAddon, Path.Combine(backupRoot, "AzerothQuesting"));
-            BackupDirectoryIfPresent(legacyAddon, Path.Combine(backupRoot, "ZoneQuestGuide"));
-
-            var migrated = MigrateSavedVariables(retailPath, progress);
 
             progress?.Report("Installing addon files...");
             Directory.CreateDirectory(extractPath);
@@ -139,14 +134,8 @@ internal sealed class AddonService
                 throw new InvalidDataException("The addon copy completed, but AzerothQuesting.toc was not found in the installed folder.");
             }
 
-            // Remove the old addon only after the new addon has been installed and validated.
-            if (Directory.Exists(legacyAddon))
-            {
-                Directory.Delete(legacyAddon, recursive: true);
-            }
-
             progress?.Report($"Azeroth Questing {installedVersion} is installed.");
-            return new AddonInstallResult(installedVersion, migrated, backupRoot);
+            return new AddonInstallResult(installedVersion, backupRoot);
         }
         finally
         {
@@ -162,51 +151,6 @@ internal sealed class AddonService
                 // Temporary cleanup can be retried by Windows later.
             }
         }
-    }
-
-    private static int MigrateSavedVariables(string retailPath, IProgress<string>? progress)
-    {
-        var accountRoot = Path.Combine(retailPath, "WTF", "Account");
-        if (!Directory.Exists(accountRoot))
-        {
-            return 0;
-        }
-
-        var copied = 0;
-        foreach (var accountDirectory in Directory.EnumerateDirectories(accountRoot))
-        {
-            var savedVariables = Path.Combine(accountDirectory, "SavedVariables");
-            if (!Directory.Exists(savedVariables))
-            {
-                continue;
-            }
-
-            copied += CopyLegacyFileIfNeeded(
-                Path.Combine(savedVariables, "ZoneQuestGuide.lua"),
-                Path.Combine(savedVariables, "AzerothQuesting.lua"));
-
-            copied += CopyLegacyFileIfNeeded(
-                Path.Combine(savedVariables, "ZoneQuestGuide.lua.bak"),
-                Path.Combine(savedVariables, "AzerothQuesting.lua.bak"));
-        }
-
-        if (copied > 0)
-        {
-            progress?.Report($"Migrated {copied} legacy SavedVariables file(s).");
-        }
-
-        return copied;
-    }
-
-    private static int CopyLegacyFileIfNeeded(string source, string destination)
-    {
-        if (!File.Exists(source) || File.Exists(destination))
-        {
-            return 0;
-        }
-
-        File.Copy(source, destination, overwrite: false);
-        return 1;
     }
 
     private static void BackupDirectoryIfPresent(string source, string destination)
