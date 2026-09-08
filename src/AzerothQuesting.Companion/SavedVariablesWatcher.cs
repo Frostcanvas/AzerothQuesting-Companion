@@ -55,7 +55,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
 
             var watcher = new FileSystemWatcher(savedVariables)
             {
-                Filter = "*.lua",
+                Filter = "AzerothQuesting.lua",
                 IncludeSubdirectories = false,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
                 EnableRaisingEvents = true,
@@ -103,13 +103,10 @@ internal sealed class SavedVariablesWatcher : IDisposable
                 continue;
             }
 
-            foreach (var name in new[] { "AzerothQuesting.lua", "ZoneQuestGuide.lua" })
+            var path = Path.Combine(savedVariables, "AzerothQuesting.lua");
+            if (File.Exists(path))
             {
-                var path = Path.Combine(savedVariables, name);
-                if (File.Exists(path))
-                {
-                    files.Add(path);
-                }
+                files.Add(path);
             }
         }
 
@@ -139,9 +136,10 @@ internal sealed class SavedVariablesWatcher : IDisposable
 
     private static bool IsTrackedFile(string path)
     {
-        var name = Path.GetFileName(path);
-        return string.Equals(name, "AzerothQuesting.lua", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(name, "ZoneQuestGuide.lua", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(
+            Path.GetFileName(path),
+            "AzerothQuesting.lua",
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private void Debounce(string path)
