@@ -38,7 +38,7 @@ internal sealed class MainForm : Form
 
     private readonly Button _checkUpdatesButton = CreateActionButton("Check for Updates", Gold);
     private readonly Button _installButton = CreateActionButton("Install / Update Addon", Gold);
-    private readonly Button _scanButton = CreateActionButton("Scan / Queue Now", Purple);
+    private readonly Button _scanButton = CreateActionButton("Scan for Observations", Purple);
 
     private SavedVariablesWatcher? _watcher;
     private NotifyIcon? _notifyIcon;
@@ -343,7 +343,7 @@ internal sealed class MainForm : Form
         cards.Controls.Add(CreateCard("Client Update", _clientUpdateValue, "GitHub Releases"), 1, 0);
         cards.Controls.Add(CreateCard("Installed Addon", _installedAddonValue, "AzerothQuesting"), 2, 0);
         cards.Controls.Add(CreateCard("Latest Addon", _latestAddonValue, "GitHub"), 3, 0);
-        cards.Controls.Add(CreateCard("Queued Snapshots", _queueValue, "Waiting for Service01"), 0, 1);
+        cards.Controls.Add(CreateCard("Pending Observations", _queueValue, "Waiting for Service01"), 0, 1);
         cards.Controls.Add(CreateCard("SavedVariables Files", _dataValue, "Currently watched"), 1, 1);
         cards.Controls.Add(CreateCard("Last Data Activity", _lastDataValue, "Disk watcher"), 2, 1);
         cards.Controls.Add(CreateCard("Sync Status", _uploadValue, "Upload API"), 3, 1);
@@ -815,7 +815,7 @@ internal sealed class MainForm : Form
         {
             await _watcher.ScanExistingAsync();
             RefreshLocalStatus();
-            SetStatus("SavedVariables scan complete. New data was queued only if its content changed.");
+            SetStatus("SavedVariables scan complete. New observations were queued only when the data changed.");
             AddActivity("Manual SavedVariables scan completed.");
         }
         finally
@@ -834,8 +834,8 @@ internal sealed class MainForm : Form
             RefreshLocalStatus();
             if (e.Queued)
             {
-                SetStatus("Azeroth Questing data changed; a deduplicated snapshot was queued locally.");
-                AddActivity("New Azeroth Questing data snapshot queued.");
+                SetStatus("Azeroth Questing data changed; a new pending observation was queued locally.");
+                AddActivity("New Azeroth Questing observation queued.");
             }
         });
     }
@@ -1009,7 +1009,7 @@ internal sealed class MainForm : Form
     private static string GetClientVersion()
     {
         var version = Assembly.GetExecutingAssembly().GetName().Version;
-        return version is null ? "0.1.1" : $"{version.Major}.{version.Minor}.{version.Build}";
+        return version is null ? "0.1.2" : $"{version.Major}.{version.Minor}.{version.Build}";
     }
 
     private static Panel CreateSurfacePanel() => new()

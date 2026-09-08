@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2 - September 8, 2026
+
+- Changed the player-facing queue terminology from **Snapshots** to **Pending Observations** so the client more clearly describes research data waiting to upload to Service01.
+- Changed the manual queue action to **Scan for Observations**.
+- Updated activity/status wording so newly collected data is described as an observation rather than a snapshot.
+- Kept the underlying deduplication/outbox behavior unchanged.
+- Updated the companion version and GitHub API user agent to 0.1.2.
+
+The v0.1.2 source still needs testing on the player's Windows installation. This release is also intended to test the v0.1.1 self-update flow by clicking **Check for Updates** in v0.1.1 and allowing it to upgrade itself to v0.1.2. Service01 uploading remains disabled; pending observations stay local.
+
 ## 0.1.1 - September 8, 2026
 
 - Added **Check for Updates** support for both the companion and the Azeroth Questing addon.
