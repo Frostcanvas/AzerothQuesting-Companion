@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.3 - September 8, 2026
+
+- Added a normal Windows installer, `AzerothQuestingCompanion-Setup.exe`, for a proper installed desktop application.
+- Added Start Menu integration and a desktop-shortcut option.
+- Changed the companion publish format from a compressed single-file executable to a conventional self-contained application directory packaged by Inno Setup.
+- Changed companion self-updates to download and run the published installer from the companion's local update directory instead of copying the running executable into a randomized Windows Temp folder.
+- Kept SHA-256 verification for GitHub Release assets when GitHub supplies a digest.
+- Improved player-facing terminology so the dashboard uses **Pending Observations** and **Scan for Observations** instead of snapshot wording.
+- Added explicit privacy wording that the companion does not capture the screen, record gameplay, or take screenshots.
+- Documented that the Windows binaries are not code-signed yet. Endpoint-security products can still warn about unsigned/reputation-new binaries until code signing is added.
+
+The v0.1.3 source and installer still need testing on the player's Windows installation. In particular, verify installation, desktop/Start Menu shortcuts, the new installer-based self-update flow on the next release, WoW path detection, addon update/repair, and Pending Observations behavior. Service01 uploading remains disabled; pending observations stay local.
+
 ## 0.1.2 - September 8, 2026
 
 - Changed the player-facing queue terminology from **Snapshots** to **Pending Observations** so the client more clearly describes research data waiting to upload to Service01.
@@ -8,7 +21,7 @@
 - Kept the underlying deduplication/outbox behavior unchanged.
 - Updated the companion version and GitHub API user agent to 0.1.2.
 
-The v0.1.2 source still needs testing on the player's Windows installation. This release is also intended to test the v0.1.1 self-update flow by clicking **Check for Updates** in v0.1.1 and allowing it to upgrade itself to v0.1.2. Service01 uploading remains disabled; pending observations stay local.
+The v0.1.2 source still needs testing on the player's Windows installation. This release was also intended to test the v0.1.1 self-update flow by clicking **Check for Updates** in v0.1.1 and allowing it to upgrade itself to v0.1.2. Service01 uploading remains disabled; pending observations stay local.
 
 ## 0.1.1 - September 8, 2026
 
