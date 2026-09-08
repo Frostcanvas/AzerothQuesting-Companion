@@ -31,9 +31,7 @@ jobs:
           -c Release
           -r win-x64
           --self-contained true
-          -p:PublishSingleFile=true
-          -p:EnableCompressionInSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:PublishSingleFile=false
           -p:DebugType=None
           -p:DebugSymbols=false
           -o publish/win-x64
@@ -47,19 +45,42 @@ jobs:
           }
           Get-Item $exe | Format-List Name,Length,LastWriteTime
 
-      - name: Create Windows update package
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build Windows installer
         shell: pwsh
         run: |
-          $zip = "publish/AzerothQuestingCompanion-win-x64.zip"
-          if (Test-Path $zip) { Remove-Item $zip -Force }
-          Compress-Archive -Path "publish/win-x64/AzerothQuestingCompanion.exe" -DestinationPath $zip -CompressionLevel Optimal
-          Get-FileHash $zip -Algorithm SHA256 | Format-List
+          $project = [xml](Get-Content "src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj")
+          $version = $project.Project.PropertyGroup.Version
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Could not read companion version from the project file."
+          }
 
-      - name: Upload Windows build
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup compiler was not found at $iscc"
+          }
+
+          & $iscc "/DMyAppVersion=$version" "installer\AzerothQuestingCompanion.iss"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE"
+          }
+
+          $setup = "publish/installer/AzerothQuestingCompanion-Setup.exe"
+          if (-not (Test-Path $setup)) {
+            throw "AzerothQuestingCompanion-Setup.exe was not produced."
+          }
+
+          Get-Item $setup | Format-List Name,Length,LastWriteTime
+          Get-FileHash $setup -Algorithm SHA256 | Format-List
+
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: AzerothQuestingCompanion-win-x64
-          path: publish/AzerothQuestingCompanion-win-x64.zip
+          name: AzerothQuestingCompanion-Setup
+          path: publish/installer/AzerothQuestingCompanion-Setup.exe
           if-no-files-found: error
 
       - name: Publish versioned GitHub Release
@@ -75,7 +96,7 @@ jobs:
           }
 
           $tag = "companion-v$version"
-          $asset = "publish/AzerothQuestingCompanion-win-x64.zip"
+          $asset = "publish/installer/AzerothQuestingCompanion-Setup.exe"
 
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
