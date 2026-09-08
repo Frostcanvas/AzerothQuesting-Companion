@@ -20,7 +20,7 @@ internal sealed class GitHubAddonClient : IDisposable
         {
             Timeout = TimeSpan.FromSeconds(45),
         };
-        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("AzerothQuestingCompanion", "0.1.2"));
+        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("AzerothQuestingCompanion", "0.1.3"));
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
     }
 
@@ -88,7 +88,7 @@ internal sealed class GitHubAddonClient : IDisposable
         foreach (var asset in assets.EnumerateArray())
         {
             var name = asset.TryGetProperty("name", out var nameValue) ? nameValue.GetString() : null;
-            if (!string.Equals(name, "AzerothQuestingCompanion-win-x64.zip", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(name, "AzerothQuestingCompanion-Setup.exe", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
