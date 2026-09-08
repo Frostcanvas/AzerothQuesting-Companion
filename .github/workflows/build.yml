@@ -65,7 +65,15 @@ jobs:
             $env:AZURE_ARTIFACT_SIGNING_ACCOUNT,
             $env:AZURE_ARTIFACT_SIGNING_PROFILE
           )
-          $configured = -not ($values | Where-Object { [string]::IsNullOrWhiteSpace($_) })
+
+          $configured = $true
+          foreach ($value in $values) {
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              $configured = $false
+              break
+            }
+          }
+
           "configured=$($configured.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           if ($configured) {
             Write-Host "Azure Artifact Signing is configured for this build."
