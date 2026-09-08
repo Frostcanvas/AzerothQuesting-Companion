@@ -5,6 +5,11 @@ namespace AzerothQuesting.Companion;
 internal sealed class CompanionSettings
 {
     public string? WowRetailPath { get; set; }
+    public bool ServiceSyncEnabled { get; set; } = true;
+    public string ServiceBaseUrl { get; set; } = "http://10.0.10.246:8766";
+    public string? ClientInstanceId { get; set; }
+    public string? InstallationId { get; set; }
+    public string? InstallationToken { get; set; }
 }
 
 internal static class SettingsService
