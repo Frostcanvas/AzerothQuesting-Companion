@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.4 - September 8, 2026
+
+- Changed the Windows installer to install Azeroth Questing Companion under **Program Files** as a normal machine-installed application instead of under the current user's Local AppData Programs folder.
+- Changed installation to request administrator approval and register the application for normal Windows Installed Apps/uninstall behavior.
+- Kept Start Menu integration and made the desktop shortcut selected by default on the first install.
+- Changed installer-based self-updates to request elevation explicitly and use the normal Windows installer path instead of the retired temporary executable-replacement updater.
+- Added cleanup for legacy v0.1.1/v0.1.2 temporary updater files when they can be removed safely.
+- Added Azure Artifact Signing support to GitHub Actions for Authenticode-signing both the companion executable and the Windows installer.
+- Added signature verification to the build workflow and made public release publishing refuse to publish an unsigned companion release.
+
+The v0.1.4 source still needs testing on the player's Windows installation. The GitHub signing workflow is prepared, but a trusted Azure Artifact Signing account, certificate profile, and GitHub authentication/configuration values still need to be created before v0.1.4 can be published as a signed public release. Until that configuration exists, development artifacts remain unsigned and Windows SmartScreen or endpoint protection can still warn about them.
+
 ## 0.1.3 - September 8, 2026
 
 - Added a normal Windows installer, `AzerothQuestingCompanion-Setup.exe`, for a proper installed desktop application.
