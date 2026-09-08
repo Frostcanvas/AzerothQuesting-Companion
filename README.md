@@ -2,25 +2,42 @@
 
 Windows companion application for the **Azeroth Questing** World of Warcraft addon.
 
-## Current MVP - v0.1.0
+## Current client - v0.1.1
 
 The companion currently:
 
 - Detects a World of Warcraft Retail installation on Windows.
 - Detects the installed Azeroth Questing addon and its version.
-- Installs or updates Azeroth Questing from the public `Frostcanvas/AzerothQuesting` GitHub repository.
+- Checks both the companion and Azeroth Questing addon for updates from GitHub.
+- Automatically downloads, applies, and restarts the companion when a newer public companion release is available.
+- Installs, updates, or repairs Azeroth Questing from the public `Frostcanvas/AzerothQuesting` GitHub repository.
 - Refuses to change addon files while World of Warcraft is running.
-- Backs up an existing Azeroth Questing or legacy ZoneQuestGuide addon before replacing it.
-- Migrates `ZoneQuestGuide.lua` SavedVariables to `AzerothQuesting.lua` when the new file does not already exist.
+- Backs up the existing Azeroth Questing addon before replacing it.
 - Watches Azeroth Questing SavedVariables for changes.
 - Queues deduplicated local snapshots under `%LOCALAPPDATA%\AzerothQuesting\Companion\Outbox`.
 - Runs in the Windows notification area so it can keep watching in the background.
+- Uses a dark dashboard-style interface with addon, update, WoW path, local data, and recent activity status.
 
-The Service01 upload API is the next backend step. v0.1.0 intentionally keeps observations local until that API exists and can be validated.
+The companion no longer detects, migrates, deletes, or otherwise manages the retired ZoneQuestGuide addon or its SavedVariables.
+
+The Service01 upload API is still the next backend step. v0.1.1 keeps observations local until that API exists and can be validated.
+
+## Updates
+
+The **Check for Updates** action checks both repositories:
+
+- Companion: `Frostcanvas/AzerothQuesting-Companion`
+- Addon: `Frostcanvas/AzerothQuesting`
+
+If a newer companion release is available, the client downloads `AzerothQuestingCompanion-win-x64.zip`, verifies the GitHub SHA-256 digest when GitHub supplies one, launches a temporary updater copy, exits, replaces the running executable, and restarts automatically.
+
+Addon updates are reported in the same check. Use **Update Addon** to install the newest addon package. Addon updates are not applied while World of Warcraft is running.
+
+GitHub Actions creates the self-contained Windows x64 package and can publish a versioned GitHub Release when a release commit is pushed.
 
 ## Privacy
 
-The companion does **not** read World of Warcraft process memory. It only works with addon files and Azeroth Questing SavedVariables on disk. The local outbox uses hashes rather than character/account names in snapshot filenames.
+The companion does **not** read World of Warcraft process memory. It only works with Azeroth Questing addon files and SavedVariables on disk. The local outbox uses hashes rather than character/account names in snapshot filenames.
 
 When Service01 uploading is added, the API payload will be limited to the quest/map/phase/instance research data needed by Azeroth Questing. Character names, BattleTags, guild chat, party chat, and unrelated files are not part of the design.
 
