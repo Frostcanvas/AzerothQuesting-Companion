@@ -8,10 +8,18 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+      AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+      AZURE_ARTIFACT_SIGNING_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
 
     steps:
       - name: Check out repository
@@ -45,6 +53,58 @@ jobs:
           }
           Get-Item $exe | Format-List Name,Length,LastWriteTime
 
+      - name: Detect trusted signing configuration
+        id: signing
+        shell: pwsh
+        run: |
+          $values = @(
+            $env:AZURE_CLIENT_ID,
+            $env:AZURE_TENANT_ID,
+            $env:AZURE_SUBSCRIPTION_ID,
+            $env:AZURE_ARTIFACT_SIGNING_ENDPOINT,
+            $env:AZURE_ARTIFACT_SIGNING_ACCOUNT,
+            $env:AZURE_ARTIFACT_SIGNING_PROFILE
+          )
+          $configured = -not ($values | Where-Object { [string]::IsNullOrWhiteSpace($_) })
+          "configured=$($configured.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if ($configured) {
+            Write-Host "Azure Artifact Signing is configured for this build."
+          } else {
+            Write-Host "Azure Artifact Signing is not configured; development artifacts will remain unsigned."
+          }
+
+      - name: Azure login for code signing
+        if: steps.signing.outputs.configured == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign companion executable
+        if: steps.signing.outputs.configured == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\publish\win-x64\AzerothQuestingCompanion.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Azeroth Questing Companion
+          description-url: https://github.com/Frostcanvas/AzerothQuesting-Companion
+
+      - name: Verify companion signature
+        if: steps.signing.outputs.configured == 'true'
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature "publish/win-x64/AzerothQuestingCompanion.exe"
+          $signature | Format-List Status,StatusMessage,SignerCertificate,TimeStamperCertificate
+          if ($signature.Status -ne 'Valid') {
+            throw "The companion executable does not have a valid Authenticode signature."
+          }
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --yes --no-progress
@@ -76,6 +136,30 @@ jobs:
           Get-Item $setup | Format-List Name,Length,LastWriteTime
           Get-FileHash $setup -Algorithm SHA256 | Format-List
 
+      - name: Sign Windows installer
+        if: steps.signing.outputs.configured == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\publish\installer\AzerothQuestingCompanion-Setup.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Azeroth Questing Companion Setup
+          description-url: https://github.com/Frostcanvas/AzerothQuesting-Companion
+
+      - name: Verify installer signature
+        if: steps.signing.outputs.configured == 'true'
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature "publish/installer/AzerothQuestingCompanion-Setup.exe"
+          $signature | Format-List Status,StatusMessage,SignerCertificate,TimeStamperCertificate
+          if ($signature.Status -ne 'Valid') {
+            throw "The Windows installer does not have a valid Authenticode signature."
+          }
+
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
@@ -83,8 +167,13 @@ jobs:
           path: publish/installer/AzerothQuestingCompanion-Setup.exe
           if-no-files-found: error
 
+      - name: Refuse unsigned public release
+        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v') && steps.signing.outputs.configured != 'true'
+        shell: pwsh
+        run: throw "Public companion releases require Azure Artifact Signing. Configure the signing account before releasing."
+
       - name: Publish versioned GitHub Release
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v') && steps.signing.outputs.configured == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
