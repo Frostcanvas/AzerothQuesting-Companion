@@ -7,10 +7,16 @@
 - Kept Start Menu integration and made the desktop shortcut selected by default on the first install.
 - Changed installer-based self-updates to request elevation explicitly and use the normal Windows installer path instead of the retired temporary executable-replacement updater.
 - Added cleanup for legacy v0.1.1/v0.1.2 temporary updater files when they can be removed safely.
-- Added Azure Artifact Signing support to GitHub Actions for Authenticode-signing both the companion executable and the Windows installer.
-- Added signature verification to the build workflow and made public release publishing refuse to publish an unsigned companion release.
+- Removed the remaining legacy `ZoneQuestGuide.lua` SavedVariables watcher path so the companion now watches only `AzerothQuesting.lua`.
+- Replaced the planned Azure Artifact Signing integration with SignPath Foundation's free open-source signing path.
+- Added a public code signing policy and privacy policy for the SignPath Foundation application requirements.
+- Prepared GitHub Actions to use SignPath's GitHub trusted-build-system integration with origin verification.
+- Prepared two-stage signing so the companion executable is signed before the installer is built, then the completed installer is signed before publication.
+- Added Authenticode signature verification for both the installed executable and the installer.
+- Changed development build artifacts to be clearly labeled as unsigned and made public release publishing depend on completed SignPath signing.
+- Added SignPath code-signing policy information to future GitHub Release notes.
 
-The v0.1.4 source still needs testing on the player's Windows installation. The GitHub signing workflow is prepared, but a trusted Azure Artifact Signing account, certificate profile, and GitHub authentication/configuration values still need to be created before v0.1.4 can be published as a signed public release. Until that configuration exists, development artifacts remain unsigned and Windows SmartScreen or endpoint protection can still warn about them.
+The v0.1.4 source still needs testing on the player's Windows installation. SignPath Foundation approval and the resulting SignPath project/API configuration are still required before v0.1.4 can be published as a signed public release. Until trusted signing is active, development artifacts remain unsigned and Windows SmartScreen or endpoint protection can still warn about them. Service01 uploading remains disabled; Pending Observations stay local.
 
 ## 0.1.3 - September 8, 2026
 
@@ -41,7 +47,7 @@ The v0.1.2 source still needs testing on the player's Windows installation. This
 - Added companion self-updating from public GitHub Releases. When a newer companion release is available, the client downloads it, stages it with a temporary updater copy, exits, replaces the executable, and restarts automatically.
 - Added SHA-256 verification when GitHub supplies an asset digest for the companion update package.
 - Added GitHub Actions packaging for `AzerothQuestingCompanion-win-x64.zip` and automatic versioned GitHub Release publishing for release commits.
-- Redesigned the Windows client around the dark Azeroth Questing dashboard style with sidebar navigation, top update actions, status cards, addon controls, WoW path controls, and recent activity.
+- Redesigned the Windows client around the dark Azeroth Questing dashboard style with sidebar navigation, top update actions, status cards, addon controls, WoW path controls, local data, and recent activity.
 - Changed addon update checks so the same update action reports both installed/latest addon status and companion status.
 - Removed all legacy ZoneQuestGuide addon detection, deletion, backup, and SavedVariables migration behavior. The companion now manages only Azeroth Questing.
 - Kept addon installation/update protection that refuses to replace addon files while World of Warcraft is running.
