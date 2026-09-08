@@ -1,0 +1,65 @@
+name: One-time Service01 sync integration
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Apply Service01 sync patch
+        shell: pwsh
+        run: python .github/companion_service_sync_patch.py
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore and build
+        shell: pwsh
+        run: |
+          dotnet restore src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj
+          dotnet build src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj -c Release --no-restore
+
+      - name: Validate expected integration
+        shell: pwsh
+        run: |
+          $project = [xml](Get-Content "src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj")
+          if ($project.Project.PropertyGroup.Version -ne '0.1.5') { throw 'Companion version is not 0.1.5.' }
+          Select-String -Path "src/AzerothQuesting.Companion/MainForm.cs" -Pattern "Sync Pending Observations to Service01" -Quiet | Out-Null
+          if (-not $?) { throw 'Service01 sync toggle was not added.' }
+          Select-String -Path "src/AzerothQuesting.Companion/Service01Client.cs" -Pattern "/api/v1/observations/batch" -Quiet | Out-Null
+          if (-not $?) { throw 'Structured observation endpoint is missing.' }
+          git diff --check
+
+      - name: Commit integration
+        shell: pwsh
+        run: |
+          git config user.name "Frostcanvas"
+          git config user.email "131615585+Frostcanvas@users.noreply.github.com"
+          git add src README.md PRIVACY.md CHANGELOG.md
+          if ((git status --porcelain).Length -eq 0) {
+            Write-Host "No companion integration changes were needed."
+            exit 0
+          }
+          git commit -m "Develop companion v0.1.5 Service01 sync"
+          git push origin HEAD:main
