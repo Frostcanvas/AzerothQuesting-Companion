@@ -27,7 +27,9 @@ jobs:
 
       - name: Apply Service01 sync patch
         shell: pwsh
-        run: python .github/companion_service_sync_patch.py
+        run: |
+          python .github/companion_service_sync_patch.py
+          python .github/fix_companion_sync_generated.py
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v5
