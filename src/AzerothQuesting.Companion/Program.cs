@@ -3,16 +3,13 @@ namespace AzerothQuesting.Companion;
 internal static class Program
 {
     [STAThread]
-    private static void Main(string[] args)
+    private static void Main()
     {
         ApplicationConfiguration.Initialize();
-
-        if (CompanionUpdateService.TryRunUpdaterMode(args))
-        {
-            return;
-        }
-
         CompanionUpdateService.CleanupStaleUpdateDirectories();
-        Application.Run(new MainForm());
+
+        var form = new MainForm();
+        UiTerminology.Apply(form);
+        Application.Run(form);
     }
 }
