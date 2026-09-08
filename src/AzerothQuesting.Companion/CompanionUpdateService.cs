@@ -27,12 +27,13 @@ internal sealed class CompanionUpdateService
         await _github.DownloadAsync(package.DownloadUrl, installerPath, cancellationToken);
         VerifyDigestIfPresent(installerPath, package.Digest);
 
-        progress?.Report("Starting the installed-app updater. The companion will restart automatically.");
+        progress?.Report("Starting the Windows installer. Approve the Windows permission prompt if it appears.");
 
         var startInfo = new ProcessStartInfo
         {
             FileName = installerPath,
             UseShellExecute = true,
+            Verb = "runas",
             WorkingDirectory = updateRoot,
         };
         startInfo.ArgumentList.Add("/VERYSILENT");
@@ -49,6 +50,12 @@ internal sealed class CompanionUpdateService
     }
 
     public static void CleanupStaleUpdateDirectories()
+    {
+        CleanupCurrentInstallerCache();
+        CleanupLegacyTemporaryUpdater();
+    }
+
+    private static void CleanupCurrentInstallerCache()
     {
         var root = Path.Combine(AppPaths.Root, "Updates");
         if (!Directory.Exists(root))
@@ -70,6 +77,27 @@ internal sealed class CompanionUpdateService
             {
                 // Update cleanup is best effort and must never block startup.
             }
+        }
+    }
+
+    private static void CleanupLegacyTemporaryUpdater()
+    {
+        var legacyRoot = Path.Combine(
+            Path.GetTempPath(),
+            "AzerothQuestingCompanion",
+            "updates");
+
+        try
+        {
+            if (Directory.Exists(legacyRoot))
+            {
+                Directory.Delete(legacyRoot, recursive: true);
+            }
+        }
+        catch
+        {
+            // v0.1.1/v0.1.2 temporary updater files may still be locked by endpoint
+            // protection or an old process. They are harmless and can be removed later.
         }
     }
 
