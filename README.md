@@ -4,7 +4,7 @@ Windows companion application for the **Azeroth Questing** World of Warcraft add
 
 ## Development version - v0.1.4
 
-The latest public release remains v0.1.3 until trusted Windows code signing is configured for the GitHub release pipeline.
+The latest public release remains v0.1.3 until trusted Windows code signing is approved and configured through SignPath Foundation.
 
 The companion currently:
 
@@ -14,13 +14,13 @@ The companion currently:
 - Installs, updates, or repairs Azeroth Questing from the public `Frostcanvas/AzerothQuesting` GitHub repository.
 - Refuses to change addon files while World of Warcraft is running.
 - Backs up the existing Azeroth Questing addon before replacing it.
-- Watches Azeroth Questing SavedVariables for changes.
+- Watches only the current `AzerothQuesting.lua` SavedVariables data for changes.
 - Queues deduplicated **Pending Observations** under `%LOCALAPPDATA%\AzerothQuesting\Companion\Outbox` until Service01 accepts uploads.
 - Runs in the Windows notification area so it can keep watching in the background.
 - Uses a dark dashboard-style interface with addon, update, WoW path, local data, and recent activity status.
 - Installs as a normal Windows desktop application with Start Menu integration, Windows Installed Apps/uninstall registration, and a desktop shortcut selected by default on first install.
 
-The companion no longer detects, migrates, deletes, or otherwise manages the retired ZoneQuestGuide addon or its SavedVariables.
+The companion does not detect, migrate, delete, watch, or otherwise manage the retired ZoneQuestGuide addon or its SavedVariables.
 
 The Service01 upload API is still a backend step. Pending observations remain local until that API exists and can be validated.
 
@@ -43,24 +43,41 @@ This replaces the v0.1.1-v0.1.2 temporary self-copy updater, which executed an u
 
 Addon updates are reported in the same check. Use **Update Addon** to install the newest addon package. Addon updates are not applied while World of Warcraft is running.
 
-## Windows code signing
+## Code signing policy
 
-The GitHub Actions workflow is prepared for Microsoft Azure Artifact Signing. When configured, the pipeline Authenticode-signs both `AzerothQuestingCompanion.exe` and `AzerothQuestingCompanion-Setup.exe`, verifies the signatures, and refuses to publish a public release if signing is unavailable.
+**Free code signing provided by SignPath.io, certificate by SignPath Foundation.**
 
-Required GitHub configuration:
+See the full [Code signing policy](CODE_SIGNING.md) and [Privacy policy](PRIVACY.md).
 
-- Secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
-- Repository variables: `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_PROFILE`
+The repository is being prepared for SignPath Foundation's free open-source code-signing program. Public release builds use GitHub-hosted Windows runners and SignPath's GitHub trusted-build-system integration so signed binaries can be tied back to the repository, workflow run, and commit that built them.
 
-The Azure identity used by GitHub Actions needs access to the selected Artifact Signing certificate profile.
+A release build signs in two stages:
 
-Until that trusted signing configuration exists, development artifacts are unsigned and Windows SmartScreen or endpoint-security products can still warn about them. Do not disable security software or add broad exclusions just to run the companion.
+1. Build and submit `AzerothQuestingCompanion.exe` to SignPath.
+2. Verify the signed executable and include it in the Windows installer.
+3. Build and submit `AzerothQuestingCompanion-Setup.exe` to SignPath.
+4. Verify the signed installer before publishing the GitHub Release.
+
+This two-stage process ensures that both the installed executable and the installer itself are signed.
+
+After SignPath Foundation approves the project, the GitHub repository will need:
+
+- Secret: `SIGNPATH_API_TOKEN`
+- Repository variable: `SIGNPATH_ORGANIZATION_ID`
+- Repository variable: `SIGNPATH_PROJECT_SLUG`
+- Repository variable: `SIGNPATH_SIGNING_POLICY_SLUG`
+- Repository variable: `SIGNPATH_EXECUTABLE_ARTIFACT_CONFIGURATION_SLUG`
+- Repository variable: `SIGNPATH_INSTALLER_ARTIFACT_CONFIGURATION_SLUG`
+
+The SignPath GitHub App must also be allowed to access this repository for trusted-build origin verification.
+
+Until SignPath approval and configuration are complete, development artifacts remain unsigned and Windows SmartScreen or endpoint-security products can still warn about them. Do not disable security software or add broad exclusions just to run the companion.
 
 ## Privacy
 
-The companion does **not** read World of Warcraft process memory, capture the screen, record gameplay, inspect other applications, or take screenshots. It only works with Azeroth Questing addon files and SavedVariables on disk. Pending observations are stored in the local Outbox and use hashes rather than character/account names in their filenames.
+The companion does **not** read World of Warcraft process memory, capture the screen, record gameplay, inspect other applications, or take screenshots. It only works with Azeroth Questing addon files and `AzerothQuesting.lua` SavedVariables on disk. Pending observations are stored in the local Outbox and use hashes rather than character/account names in their filenames.
 
-When Service01 uploading is added, the API payload will be limited to the quest/map/phase/instance research data needed by Azeroth Questing. Character names, BattleTags, guild chat, party chat, and unrelated files are not part of the design.
+The current companion does not upload Pending Observations to Service01. When Service01 uploading is added, the privacy policy and user controls will be updated before that feature is enabled.
 
 ## Build
 
