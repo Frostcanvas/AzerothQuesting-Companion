@@ -2,7 +2,7 @@
 
 Windows companion application for the **Azeroth Questing** World of Warcraft addon.
 
-## Development version - v0.1.4
+## Development version - v0.1.5
 
 The latest public release remains v0.1.3 until trusted Windows code signing is approved and configured through SignPath Foundation.
 
@@ -15,14 +15,16 @@ The companion currently:
 - Refuses to change addon files while World of Warcraft is running.
 - Backs up the existing Azeroth Questing addon before replacing it.
 - Watches only the current `AzerothQuesting.lua` SavedVariables data for changes.
-- Queues deduplicated **Pending Observations** under `%LOCALAPPDATA%\AzerothQuesting\Companion\Outbox` until Service01 accepts uploads.
+- Queues deduplicated **Pending Observations** under `%LOCALAPPDATA%\AzerothQuesting\Companion\Outbox` and synchronizes them to the Service01 Azeroth Questing API when synchronization is enabled.
+- Uses per-installation bearer registration; no shared Service01 secret is embedded in the public companion.
+- Uploads new v0.2.32+ structured quest observations with quest/map/evidence, faction, class, level, completion, source, and timestamps; older already-queued snapshots use the compatibility raw endpoint.
 - Runs in the Windows notification area so it can keep watching in the background.
 - Uses a dark dashboard-style interface with addon, update, WoW path, local data, and recent activity status.
 - Installs as a normal Windows desktop application with Start Menu integration, Windows Installed Apps/uninstall registration, and a desktop shortcut selected by default on first install.
 
 The companion does not detect, migrate, delete, watch, or otherwise manage the retired ZoneQuestGuide addon or its SavedVariables.
 
-The Service01 upload API is still a backend step. Pending observations remain local until that API exists and can be validated.
+Service01 synchronization targets `http://10.0.10.246:8766` on the FrostLabs LAN. The dashboard includes a **Sync Pending Observations to Service01** checkbox and **Sync Now** action. If Service01 is unavailable, Pending Observations remain in the local Outbox and are retried later. Internet-facing synchronization is not enabled; a future public endpoint must use HTTPS and abuse controls.
 
 ## Windows installation and updates
 
@@ -77,7 +79,7 @@ Until SignPath approval and configuration are complete, development artifacts re
 
 The companion does **not** read World of Warcraft process memory, capture the screen, record gameplay, inspect other applications, or take screenshots. It only works with Azeroth Questing addon files and `AzerothQuesting.lua` SavedVariables on disk. Pending observations are stored in the local Outbox and use hashes rather than character/account names in their filenames.
 
-The current companion does not upload Pending Observations to Service01. When Service01 uploading is added, the privacy policy and user controls will be updated before that feature is enabled.
+Beginning with development v0.1.5, Service01 synchronization can upload Pending Observations to the private FrostLabs API. Synchronization is enabled by default for the FrostLabs LAN build and can be disabled at any time from the dashboard; failed uploads remain local for retry. See `PRIVACY.md` for the exact observation fields.
 
 ## Build
 

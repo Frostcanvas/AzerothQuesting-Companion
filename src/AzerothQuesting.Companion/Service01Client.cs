@@ -48,6 +48,7 @@ internal sealed partial class Service01Client : IDisposable
 
         if (files.Length == 0)
         {
+            await CheckStatusAsync(cancellationToken);
             return new ServiceSyncResult(0, 0, 0, 0, "Connected - nothing pending");
         }
 
@@ -107,6 +108,15 @@ internal sealed partial class Service01Client : IDisposable
             duplicates,
             remaining,
             status);
+    }
+
+    public async Task CheckStatusAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        using var request = new HttpRequestMessage(HttpMethod.Get, BaseUrl + "/api/v1/status");
+        request.Headers.UserAgent.ParseAdd("AzerothQuestingCompanion");
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, "status check", cancellationToken);
     }
 
     private async Task EnsureRegisteredAsync(string companionVersion, CancellationToken cancellationToken)

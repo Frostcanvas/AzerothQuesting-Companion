@@ -22,6 +22,8 @@ internal sealed class MainForm : Form
     private readonly AddonService _addonService;
     private readonly CompanionUpdateService _updateService;
     private readonly CompanionSettings _settings;
+    private readonly Service01Client _serviceClient;
+    private readonly SemaphoreSlim _syncGate = new(1, 1);
 
     private readonly Label _clientVersionValue = CreateValueLabel("Starting...");
     private readonly Label _clientUpdateValue = CreateValueLabel("Not checked");
@@ -39,6 +41,7 @@ internal sealed class MainForm : Form
     private readonly Button _checkUpdatesButton = CreateActionButton("Check for Updates", Gold);
     private readonly Button _installButton = CreateActionButton("Install / Update Addon", Gold);
     private readonly Button _scanButton = CreateActionButton("Scan for Observations", Purple);
+    private readonly Button _syncButton = CreateActionButton("Sync Now", Purple);
 
     private SavedVariablesWatcher? _watcher;
     private NotifyIcon? _notifyIcon;
@@ -52,6 +55,7 @@ internal sealed class MainForm : Form
         _settings = SettingsService.Load();
         _addonService = new AddonService(_github);
         _updateService = new CompanionUpdateService(_github);
+        _serviceClient = new Service01Client(_settings);
 
         Text = "Azeroth Questing Companion";
         StartPosition = FormStartPosition.CenterScreen;
@@ -77,6 +81,8 @@ internal sealed class MainForm : Form
         {
             _watcher?.Dispose();
             _notifyIcon?.Dispose();
+            _serviceClient.Dispose();
+            _syncGate.Dispose();
             _github.Dispose();
         };
     }
@@ -106,7 +112,9 @@ internal sealed class MainForm : Form
         Controls.Add(shell);
 
         _clientVersionValue.Text = GetClientVersion();
-        _uploadValue.Text = "Service01 not connected yet";
+        _uploadValue.Text = _settings.ServiceSyncEnabled
+            ? "Waiting for Service01"
+            : "Sync disabled";
     }
 
     private Control BuildSidebar()
@@ -146,7 +154,7 @@ internal sealed class MainForm : Form
 
         layout.Controls.Add(CreateNavButton("Home", (_, _) => SetStatus("Home dashboard ready."), active: true), 0, 1);
         layout.Controls.Add(CreateNavButton("Addon", (_, _) => _installButton.Focus()), 0, 2);
-        layout.Controls.Add(CreateNavButton("Sync", async (_, _) => await ScanNowAsync()), 0, 3);
+        layout.Controls.Add(CreateNavButton("Sync", async (_, _) => await SyncNowAsync(scanFirst: true)), 0, 3);
         layout.Controls.Add(CreateNavButton("Data", (_, _) => OpenPath(AppPaths.Root)), 0, 4);
         layout.Controls.Add(CreateNavButton("Settings", async (_, _) => await BrowseForWowAsync()), 0, 5);
         layout.Controls.Add(CreateNavButton("Logs", (_, _) => OpenPath(AppPaths.Root)), 0, 6);
@@ -207,12 +215,14 @@ internal sealed class MainForm : Form
         _checkUpdatesButton.Click += async (_, _) => await CheckForUpdatesAsync();
         _installButton.Click += async (_, _) => await InstallAddonAsync();
         _scanButton.Click += async (_, _) => await ScanNowAsync();
+        _syncButton.Click += async (_, _) => await SyncNowAsync(scanFirst: true);
         var repair = CreateActionButton("Repair Addon", Purple);
         repair.Click += async (_, _) => await InstallAddonAsync();
 
         bar.Controls.Add(_checkUpdatesButton);
         bar.Controls.Add(_installButton);
         bar.Controls.Add(_scanButton);
+        bar.Controls.Add(_syncButton);
         bar.Controls.Add(repair);
         return bar;
     }
@@ -343,10 +353,10 @@ internal sealed class MainForm : Form
         cards.Controls.Add(CreateCard("Client Update", _clientUpdateValue, "GitHub Releases"), 1, 0);
         cards.Controls.Add(CreateCard("Installed Addon", _installedAddonValue, "AzerothQuesting"), 2, 0);
         cards.Controls.Add(CreateCard("Latest Addon", _latestAddonValue, "GitHub"), 3, 0);
-        cards.Controls.Add(CreateCard("Pending Observations", _queueValue, "Waiting for Service01"), 0, 1);
+        cards.Controls.Add(CreateCard("Pending Observations", _queueValue, "Local upload queue"), 0, 1);
         cards.Controls.Add(CreateCard("SavedVariables Files", _dataValue, "Currently watched"), 1, 1);
         cards.Controls.Add(CreateCard("Last Data Activity", _lastDataValue, "Disk watcher"), 2, 1);
-        cards.Controls.Add(CreateCard("Sync Status", _uploadValue, "Upload API"), 3, 1);
+        cards.Controls.Add(CreateCard("Sync Status", _uploadValue, "Service01 API"), 3, 1);
         return cards;
     }
 
@@ -359,10 +369,11 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 5,
             Padding = new Padding(18, 12, 18, 12),
             BackColor = Surface,
         };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -387,21 +398,46 @@ internal sealed class MainForm : Form
         addOns.Click += (_, _) => OpenAddOnsFolder();
         var data = CreateSecondaryButton("Open Companion Data");
         data.Click += (_, _) => OpenPath(AppPaths.Root);
+        var syncNow = CreateSecondaryButton("Sync Now");
+        syncNow.Click += async (_, _) => await SyncNowAsync(scanFirst: true);
         buttons.Controls.Add(detect);
         buttons.Controls.Add(browse);
         buttons.Controls.Add(addOns);
         buttons.Controls.Add(data);
+        buttons.Controls.Add(syncNow);
         layout.Controls.Add(buttons, 0, 2);
+
+        var serviceSync = new CheckBox
+        {
+            AutoSize = true,
+            Checked = _settings.ServiceSyncEnabled,
+            Text = $"Sync Pending Observations to Service01 ({_serviceClient.BaseUrl})",
+            Font = new Font("Segoe UI", 9, FontStyle.Regular),
+            ForeColor = TextPrimary,
+            BackColor = Surface,
+            Margin = new Padding(0, 2, 0, 8),
+        };
+        serviceSync.CheckedChanged += async (_, _) =>
+        {
+            _settings.ServiceSyncEnabled = serviceSync.Checked;
+            SettingsService.Save(_settings);
+            _uploadValue.Text = serviceSync.Checked ? "Waiting for Service01" : "Sync disabled";
+            if (serviceSync.Checked)
+            {
+                await TrySyncPendingAsync(quiet: true);
+            }
+        };
+        layout.Controls.Add(serviceSync, 0, 3);
 
         layout.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
             MaximumSize = new Size(850, 0),
-            Text = "Privacy: the companion reads only Azeroth Questing files and SavedVariables on disk. It does not inspect WoW process memory. Service01 uploading is not enabled yet, so observations remain in the local Outbox.",
+            Text = "Privacy: the companion reads only Azeroth Questing files and SavedVariables on disk. It does not inspect WoW process memory. When Service01 sync is enabled, only Azeroth Questing observation data is uploaded; disable the checkbox above to keep Pending Observations local.",
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             ForeColor = TextSecondary,
-        }, 0, 3);
+        }, 0, 4);
 
         panel.Controls.Add(layout);
         return panel;
@@ -448,6 +484,11 @@ internal sealed class MainForm : Form
         {
             ShowFromTray();
             await InstallAddonAsync();
+        });
+        menu.Items.Add("Sync Pending Observations", null, async (_, _) =>
+        {
+            ShowFromTray();
+            await SyncNowAsync(scanFirst: true);
         });
         menu.Items.Add("Open Companion Data", null, (_, _) => OpenPath(AppPaths.Root));
         menu.Items.Add(new ToolStripSeparator());
@@ -568,6 +609,7 @@ internal sealed class MainForm : Form
         await _watcher.ScanExistingAsync();
         RefreshLocalStatus();
         await RefreshRemoteAddonStatusAsync();
+        await TrySyncPendingAsync(quiet: true);
     }
 
     private async Task RefreshRemoteAddonStatusAsync()
@@ -815,12 +857,100 @@ internal sealed class MainForm : Form
         {
             await _watcher.ScanExistingAsync();
             RefreshLocalStatus();
+            if (_settings.ServiceSyncEnabled)
+            {
+                await TrySyncPendingAsync(quiet: true);
+            }
             SetStatus("SavedVariables scan complete. New observations were queued only when the data changed.");
             AddActivity("Manual SavedVariables scan completed.");
         }
         finally
         {
             EndBusy();
+        }
+    }
+
+    private async Task SyncNowAsync(bool scanFirst = false)
+    {
+        if (!TryBeginBusy("Synchronizing Pending Observations with Service01..."))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!_settings.ServiceSyncEnabled)
+            {
+                _uploadValue.Text = "Sync disabled";
+                SetStatus("Service01 synchronization is disabled. Enable it in the World of Warcraft section first.");
+                return;
+            }
+
+            if (scanFirst && _watcher is not null)
+            {
+                await _watcher.ScanExistingAsync();
+                RefreshLocalStatus();
+            }
+
+            var result = await TrySyncPendingAsync(quiet: false);
+            if (result is not null)
+            {
+                SetStatus(result.Status);
+            }
+        }
+        finally
+        {
+            EndBusy();
+        }
+    }
+
+    private async Task<ServiceSyncResult?> TrySyncPendingAsync(bool quiet)
+    {
+        if (!_settings.ServiceSyncEnabled)
+        {
+            SafeUi(() => _uploadValue.Text = "Sync disabled");
+            return null;
+        }
+
+        await _syncGate.WaitAsync();
+        try
+        {
+            var result = await _serviceClient.SyncOutboxAsync(GetClientVersion());
+            SafeUi(() =>
+            {
+                _uploadValue.Text = result.Status;
+                RefreshLocalStatus();
+                if (result.UploadedSnapshots > 0)
+                {
+                    AddActivity(
+                        $"Service01 sync completed: {result.UploadedObservations} structured observation(s), "
+                        + $"{result.DuplicateObservations} duplicate(s), {result.UploadedSnapshots} pending file(s) cleared.");
+                }
+            });
+            return result;
+        }
+        catch (Exception ex)
+        {
+            SafeUi(() =>
+            {
+                _uploadValue.Text = "Service01 unavailable";
+                if (!quiet)
+                {
+                    SetStatus($"Service01 sync failed: {ex.Message}");
+                    AddActivity($"Service01 sync failed: {ex.Message}");
+                    MessageBox.Show(
+                        this,
+                        $"Pending Observations were kept locally.\n\n{ex.Message}",
+                        "Azeroth Questing Service01 Sync",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+            });
+            return null;
+        }
+        finally
+        {
+            _syncGate.Release();
         }
     }
 
@@ -836,6 +966,10 @@ internal sealed class MainForm : Form
             {
                 SetStatus("Azeroth Questing data changed; a new pending observation was queued locally.");
                 AddActivity("New Azeroth Questing observation queued.");
+                if (_settings.ServiceSyncEnabled)
+                {
+                    _ = TrySyncPendingAsync(quiet: true);
+                }
             }
         });
     }
@@ -1009,7 +1143,7 @@ internal sealed class MainForm : Form
     private static string GetClientVersion()
     {
         var version = Assembly.GetExecutingAssembly().GetName().Version;
-        return version is null ? "0.1.2" : $"{version.Major}.{version.Minor}.{version.Build}";
+        return version is null ? "0.1.5" : $"{version.Major}.{version.Minor}.{version.Build}";
     }
 
     private static Panel CreateSurfacePanel() => new()

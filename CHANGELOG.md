@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.5 - September 8, 2026
+
+- Added Service01 synchronization for Pending Observations using the private Azeroth Questing API on the FrostLabs LAN.
+- Added anonymous per-installation registration so each client receives its own bearer token; no shared backend secret is embedded in the public companion.
+- Added structured v0.2.32+ observation uploads for quest/map/evidence, faction, class ID/token, level, completion, source, timestamp, and addon/client versions.
+- Kept compatibility upload support for already-queued pre-v0.2.32 SavedVariables snapshots so existing research is not silently discarded.
+- Added automatic retry behavior: files are deleted from the local Outbox only after Service01 accepts them; unavailable/failed uploads remain local.
+- Added **Sync Now** controls to the dashboard, sidebar, and tray menu plus a **Sync Pending Observations to Service01** opt-out checkbox.
+- Changed the Sync Status card to report the Service01 API state rather than the previous placeholder.
+- Updated the privacy policy and README before enabling network transfer behavior.
+
+The v0.1.5 Service01 client code has not yet been tested against the live Services01 host or on the player's Windows installation. The GitHub development build must compile successfully, then the Service01 API must be deployed and health-checked before end-to-end synchronization can be considered working. Public signed publication still waits for SignPath Foundation approval/configuration; the latest public release remains v0.1.3.
+
 ## 0.1.4 - September 8, 2026
 
 - Changed the Windows installer to install Azeroth Questing Companion under **Program Files** as a normal machine-installed application instead of under the current user's Local AppData Programs folder.
