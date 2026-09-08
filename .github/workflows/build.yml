@@ -192,7 +192,7 @@ jobs:
           }
 
       - name: Upload unsigned development installer
-        if: !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v'))
+        if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Release companion v')
         uses: actions/upload-artifact@v4
         with:
           name: AzerothQuestingCompanion-Setup-UNSIGNED-DEVELOPMENT
