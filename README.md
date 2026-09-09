@@ -27,7 +27,7 @@ The companion currently:
 
 The companion does not detect, migrate, delete, watch, or otherwise manage the retired ZoneQuestGuide addon or its SavedVariables.
 
-Azeroth Questing Server synchronization is configurable internally. The player-facing dashboard does not display the private FrostLabs host name or LAN address. It includes a **Sync Pending Observations to Azeroth Questing Server** checkbox, **Sync Now**, and a **Submitted Research Data** viewer. If the server is unavailable, Pending Observations remain in the local Outbox and are retried later. The Submitted Research Data viewer requires Azeroth Questing Server API `0.2.1` or newer. External testers still require the future HTTPS endpoint before server synchronization can work outside the FrostLabs LAN.
+Azeroth Questing Server synchronization is configurable internally. The player-facing dashboard does not display the private FrostLabs host name or LAN address. It includes a **Sync Pending Observations to Azeroth Questing Server** checkbox, **Sync Now**, and a **Submitted Research Data** viewer. If the server is unavailable, Pending Observations remain in the local Outbox and are retried later. The Submitted Research Data viewer works with API `0.2.1`; the new Companions Online heartbeat and collected-quest CSV export in v0.1.8-beta.3 require Azeroth Questing Server API `0.2.2`. External testers still require the future HTTPS endpoint before server synchronization can work outside the FrostLabs LAN.
 
 ## Windows installation and updates
 
