@@ -1,5 +1,8 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.1.6"
+  #define MyAppVersion "0.1.8-beta.1"
+#endif
+#ifndef MyAppFileVersion
+  #define MyAppFileVersion "0.1.8.0"
 #endif
 
 #define MyAppName "Azeroth Questing Companion"
@@ -33,7 +36,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Uninstallable=yes
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
-VersionInfoVersion={#MyAppVersion}.0
+VersionInfoVersion={#MyAppFileVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
