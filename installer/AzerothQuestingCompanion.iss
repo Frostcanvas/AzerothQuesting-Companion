@@ -1,12 +1,11 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.1.5"
+  #define MyAppVersion "0.1.6"
 #endif
 
 #define MyAppName "Azeroth Questing Companion"
 #define MyAppExeName "AzerothQuestingCompanion.exe"
 #define MyAppPublisher "Frostcanvas"
 #define MyAppURL "https://github.com/Frostcanvas/AzerothQuesting-Companion"
-#define MyAppIcon "..\src\AzerothQuesting.Companion\Assets\AzerothQuesting.ico"
 
 [Setup]
 AppId={{8CF6F5B3-1EA6-4A38-AF8C-6A57D63E5B91}
@@ -34,7 +33,6 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Uninstallable=yes
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
-SetupIconFile={#MyAppIcon}
 VersionInfoVersion={#MyAppVersion}.0
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
