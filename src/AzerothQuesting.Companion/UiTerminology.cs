@@ -1,7 +1,17 @@
+using System.Text.RegularExpressions;
+
 namespace AzerothQuesting.Companion;
 
 internal static class UiTerminology
 {
+    private static readonly Regex BetaVersionRegex = new(
+        @"(?<version>\d+\.\d+\.\d+(?:\.\d+)?)-beta\.(?<seed>\d+)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ReleaseCandidateVersionRegex = new(
+        @"(?<version>\d+\.\d+\.\d+(?:\.\d+)?)-rc\.(?<seed>\d+)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public static void Apply(Form form)
     {
         ApplyControl(form);
@@ -95,6 +105,13 @@ internal static class UiTerminology
             .Replace("snapshots", "observations", StringComparison.Ordinal)
             .Replace("Snapshot", "Observation", StringComparison.Ordinal)
             .Replace("snapshot", "observation", StringComparison.Ordinal);
+
+        replacement = BetaVersionRegex.Replace(
+            replacement,
+            match => $"{match.Groups["version"].Value} Beta {match.Groups["seed"].Value}");
+        replacement = ReleaseCandidateVersionRegex.Replace(
+            replacement,
+            match => $"{match.Groups["version"].Value} RC {match.Groups["seed"].Value}");
 
         if (replacement.Contains("Azeroth Questing Server", StringComparison.Ordinal))
         {
