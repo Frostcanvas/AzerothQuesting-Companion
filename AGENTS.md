@@ -1,21 +1,26 @@
-# Azeroth Questing Companion Release Instructions
+# Azeroth Questing Release Instructions
 
-## Changelog source-of-truth
+## Changelog source of truth
 
-The repository changelogs are the authoritative source of truth for Azeroth Questing release history:
+Authoritative release history lives in:
 
-- `Frostcanvas/AzerothQuesting/CHANGELOG.md` — Azeroth Questing addon releases.
-- `Frostcanvas/AzerothQuesting-Companion/CHANGELOG.md` — Azeroth Questing Companion releases.
-- `Frostcanvas/AzerothQuestingwebsite/CHANGELOG.md` — Azeroth Questing Website releases.
+- `Frostcanvas/AzerothQuesting/CHANGELOG.md` — Addon
+- `Frostcanvas/AzerothQuesting-Companion/CHANGELOG.md` — Companion
+- `Frostcanvas/AzerothQuestingwebsite/CHANGELOG.md` — Website
 
-Update the applicable changelog at the same time a release-worthy change is implemented. Do not reconstruct release history later from memory.
+The applicable changelog must be updated when a release-worthy change is implemented. Each Beta gets its own entry and becomes frozen once handed off, distributed, deployed for testing, or published. Stable promotion requires explicit user approval.
 
-Each Beta must retain its own entry. Continue adding to a Beta only until it is handed off for testing or published, whichever happens first. The next release-worthy change after that starts the next Beta number. Preserve Beta history after Stable release.
+## Companion release rules
 
-Stable promotion always requires explicit approval. GitHub Release notes, website release notes, and other distribution/deployment notes must be prepared from the applicable changelog.
+- Companion versions advance independently from Addon and Website versions.
+- Release-worthy Companion changes go through Beta first.
+- A consumed Beta must not be modified; increment to the next Beta.
+- Update project Version/FileVersion and `CHANGELOG.md` together.
+- Beta updater testing requires a GitHub Pre-release with `AzerothQuestingCompanion-Setup.exe`.
+- Do not claim Windows runtime testing from CI/build/installer success.
+- Beta prereleases may be unsigned while trusted signing is unavailable if clearly labeled as testing builds.
+- Stable Companion releases must always be signed and must fail closed if signing is unavailable.
 
-Record compatibility requirements between the addon, Companion, website, and Azeroth Questing Server when relevant. Never claim in-game, Windows, browser, deployment, server, Companion, or other testing succeeded unless that exact test was actually performed.
+## Implementation
 
-The addon, Companion, and website version trains are independent. Release-worthy addon and Companion changes remain Beta-first under their existing release rules. Website release-worthy changes follow the website Beta-first rules in `Frostcanvas/AzerothQuestingwebsite/AGENTS.md`.
-
-Do not commit credentials, tokens, private keys, or other secrets.
+Treat requested changes as implementation requests unless the user explicitly asks only for discussion/planning. Update every affected component and keep protocol/API/data formats compatible. Never commit secrets.
