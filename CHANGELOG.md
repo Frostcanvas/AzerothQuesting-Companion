@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.8 Beta 5 - September 8, 2026
+
+- Extended the Apple-style Beta train behavior to the Azeroth Questing addon as well as the Companion.
+- When the Beta channel is selected and a prerelease addon is already installed, an older Stable addon release is no longer treated as the current channel version and is not installed as a downgrade.
+- Beta-channel addon users now wait for a newer prerelease or the same/newer base version's Stable (golden) release before moving forward.
+- Added an install-time safeguard so an unpublished/manual addon beta cannot be accidentally replaced by an older Stable package through the Companion.
+- Kept Stable mode restricted to normal GitHub Releases. Beta mode continues to consider both GitHub Pre-releases and later Stable releases.
+- Bumped the development Companion version to `0.1.8-beta.5`.
+
+This beta still needs Windows testing. Automatic beta-to-beta Companion updating also still requires the beta installer to exist as a signed GitHub Pre-release; GitHub Actions development artifacts are not part of the in-app update feed. No Azeroth Questing addon code was changed, so the current addon remains `0.2.32` until an addon beta is actually published.
+
 ## 0.1.8 Beta 4 - September 8, 2026
 
 - Changed Beta-channel Companion update status to stay on the installed beta train instead of presenting an older Stable release as the current Beta-channel version.
