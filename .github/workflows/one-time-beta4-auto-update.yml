@@ -1,0 +1,107 @@
+name: One-time Companion 0.1.9 Beta 4 automatic update checks
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply Beta 4 changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          main = Path('src/AzerothQuesting.Companion/MainForm.cs')
+          text = main.read_text(encoding='utf-8')
+
+          old = '    private readonly SemaphoreSlim _syncGate = new(1, 1);\n'
+          new = old + '    private readonly System.Windows.Forms.Timer _updateCheckTimer = new() { Interval = 30 * 60 * 1000 };\n'
+          if old not in text:
+              raise SystemExit('Could not find sync gate field')
+          text = text.replace(old, new, 1)
+
+          old = '        BuildUi();\n        BuildTrayIcon();\n\n        Shown += async (_, _) => await InitializeAsync();\n'
+          new = '        BuildUi();\n        BuildTrayIcon();\n\n        _updateCheckTimer.Tick += async (_, _) => await CheckForUpdatesAsync(showDialog: false);\n        Shown += async (_, _) => await InitializeAsync();\n'
+          if old not in text:
+              raise SystemExit('Could not find constructor hook')
+          text = text.replace(old, new, 1)
+
+          old = '            _serviceClient.Dispose();\n            _syncGate.Dispose();\n            _github.Dispose();\n'
+          new = '            _updateCheckTimer.Stop();\n            _updateCheckTimer.Dispose();\n            _serviceClient.Dispose();\n            _syncGate.Dispose();\n            _github.Dispose();\n'
+          if old not in text:
+              raise SystemExit('Could not find FormClosed disposal block')
+          text = text.replace(old, new, 1)
+
+          old = '            await RefreshCompanionUpdateStatusAsync();\n'
+          new = '            await CheckForUpdatesAsync(showDialog: false);\n            _updateCheckTimer.Start();\n'
+          if old not in text:
+              raise SystemExit('Could not find startup update refresh')
+          text = text.replace(old, new, 1)
+
+          old = '    private async Task CheckForUpdatesAsync()\n'
+          new = '    private async Task CheckForUpdatesAsync(bool showDialog = true)\n'
+          if old not in text:
+              raise SystemExit('Could not find CheckForUpdatesAsync signature')
+          text = text.replace(old, new, 1)
+
+          old = '''            MessageBox.Show(\n                this,\n                $"{clientSummary}\\n\\n{addonSummary}\\n\\nUse Update Addon if an addon update is available.",\n                "Azeroth Questing Updates",\n                MessageBoxButtons.OK,\n                MessageBoxIcon.Information);\n'''
+          new = '''            if (showDialog)\n            {\n                MessageBox.Show(\n                    this,\n                    $"{clientSummary}\\n\\n{addonSummary}\\n\\nUse Update Addon if an addon update is available.",\n                    "Azeroth Questing Updates",\n                    MessageBoxButtons.OK,\n                    MessageBoxIcon.Information);\n            }\n'''
+          if old not in text:
+              raise SystemExit('Could not find update summary dialog')
+          text = text.replace(old, new, 1)
+
+          old = '''        finally\n        {\n            EndBusy();\n        }\n    }\n\n    private async Task<ServiceSyncResult?> TrySyncPendingAsync(bool quiet)\n'''
+          new = '''        finally\n        {\n            EndBusy();\n        }\n\n        await CheckForUpdatesAsync(showDialog: false);\n    }\n\n    private async Task<ServiceSyncResult?> TrySyncPendingAsync(bool quiet)\n'''
+          if old not in text:
+              raise SystemExit('Could not find SyncNowAsync final block')
+          text = text.replace(old, new, 1)
+
+          old = '''            });\n            return result;\n        }\n        catch (Exception ex)\n'''
+          new = '''            });\n            if (result.UploadedSnapshots > 0)\n            {\n                SafeUi(() => _ = CheckForUpdatesAsync(showDialog: false));\n            }\n            return result;\n        }\n        catch (Exception ex)\n'''
+          if old not in text:
+              raise SystemExit('Could not find successful sync return')
+          text = text.replace(old, new, 1)
+
+          main.write_text(text, encoding='utf-8')
+
+          project = Path('src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj')
+          text = project.read_text(encoding='utf-8')
+          if '<Version>0.1.9-beta.3</Version>' not in text or '<FileVersion>0.1.8.8</FileVersion>' not in text:
+              raise SystemExit('Expected Beta 3 versions were not found')
+          text = text.replace('<Version>0.1.9-beta.3</Version>', '<Version>0.1.9-beta.4</Version>', 1)
+          text = text.replace('<FileVersion>0.1.8.8</FileVersion>', '<FileVersion>0.1.8.9</FileVersion>', 1)
+          project.write_text(text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          if not text.startswith('# Changelog\n'):
+              raise SystemExit('Unexpected changelog header')
+          entry = '''# Changelog\n\n## 0.1.9 Beta 4 - September 9, 2026\n\n- Added an automatic GitHub update check when the Companion finishes starting. The same Stable/Beta channel rules used by the manual **Check for Updates** button are used for this startup check.\n- Added a background update check every 30 minutes while the Companion remains open. Background checks update the dashboard/activity status without showing the normal no-update information dialog.\n- Added an update check after a manual **Sync Now** completes and after automatic Azeroth Questing Server synchronization successfully clears one or more Pending Observation files. This lets active research sessions notice newly published addon or Companion betas without waiting for the 30-minute timer.\n- Kept Companion self-update behavior unchanged when a newer eligible Companion release is found: the installer is staged and launched using the existing updater flow. Addon updates remain player-controlled through **Update Addon** / **Install / Update Addon**.\n- Advanced the Companion test build to `0.1.9-beta.4` with Windows file version `0.1.8.9` because Beta 3 had already been handed off before these automatic update-check changes.\n- The previous Beta 3 release attempt built the application successfully but stopped at the SignPath configuration validation step before signing, installer creation, or GitHub Pre-release publication. No signed Beta 3 installer was published.\n\nBeta 4 still requires Windows testing. Verify the Companion checks for updates at startup without a no-update popup, repeats the check after roughly 30 minutes, checks again after a successful data sync, still allows the manual **Check for Updates** action, does not auto-install addon updates, and continues to stage/restart for an eligible Companion self-update. Public Companion publication still requires valid SignPath repository configuration and a signed installer; no signing success is claimed.\n\n'''
+          changelog.write_text(entry + text[len('# Changelog\n\n'):], encoding='utf-8')
+          PY
+
+      - name: Commit Beta 4 changes and remove one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Frostcanvas"
+          git config user.email "131615585+Frostcanvas@users.noreply.github.com"
+          git rm .github/workflows/one-time-beta4-auto-update.yml
+          git add src/AzerothQuesting.Companion/MainForm.cs src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj CHANGELOG.md
+          git commit -m "Add automatic update checks for Companion 0.1.9 Beta 4"
+          git push origin HEAD:main
