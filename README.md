@@ -15,7 +15,7 @@ The companion currently:
 - Refuses to change addon files while World of Warcraft is running.
 - Backs up the existing Azeroth Questing addon before replacing it.
 - Watches only the current `AzerothQuesting.lua` SavedVariables data for changes.
-- Queues deduplicated **Pending Observations** under `%LOCALAPPDATA%\AzerothQuesting\Companion\Outbox` and synchronizes them to the Service01 Azeroth Questing API when synchronization is enabled.
+- Queues deduplicated **Pending Observations** under `%LOCALAPPDATA%\AzerothQuesting\Companion\Outbox` and synchronizes them to the Azeroth Questing Server when synchronization is enabled.
 - Uses per-installation bearer registration; no shared server secret is embedded in the public companion.
 - Uploads new v0.2.32+ structured quest observations with quest/map/evidence, faction, class, level, completion, source, and timestamps; older already-queued snapshots use the compatibility raw endpoint.
 - Runs in the Windows notification area so it can keep watching in the background.
@@ -25,7 +25,7 @@ The companion currently:
 
 The companion does not detect, migrate, delete, watch, or otherwise manage the retired ZoneQuestGuide addon or its SavedVariables.
 
-Azeroth Questing Server synchronization is configurable internally. The player-facing dashboard does not display the private FrostLabs host name or LAN address. It includes a **Sync Pending Observations to Azeroth Questing Server** checkbox, **Sync Now**, and a **Submitted Research Data** viewer. If the server is unavailable, Pending Observations remain in the local Outbox and are retried later. External testers still require the future HTTPS endpoint before server synchronization can work outside the FrostLabs LAN.
+Azeroth Questing Server synchronization is configurable internally. The player-facing dashboard does not display the private FrostLabs host name or LAN address. It includes a **Sync Pending Observations to Azeroth Questing Server** checkbox, **Sync Now**, and a **Submitted Research Data** viewer. If the server is unavailable, Pending Observations remain in the local Outbox and are retried later. The Submitted Research Data viewer requires Azeroth Questing Server API `0.2.1` or newer. External testers still require the future HTTPS endpoint before server synchronization can work outside the FrostLabs LAN.
 
 ## Windows installation and updates
 
