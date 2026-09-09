@@ -1124,26 +1124,29 @@ internal sealed class MainForm : Form
 
     private static bool VersionsMatch(string left, string right)
     {
-        static string Normalize(string value) => value.Trim().TrimStart('v', 'V');
-        var a = Normalize(left);
-        var b = Normalize(right);
-        return Version.TryParse(a, out var va) && Version.TryParse(b, out var vb)
-            ? va == vb
-            : string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        return ReleaseVersionUtility.Matches(left, right);
     }
 
     private static bool IsNewerVersion(string current, string remote)
     {
-        static string Normalize(string value) => value.Trim().TrimStart('v', 'V');
-        return Version.TryParse(Normalize(current), out var currentVersion)
-            && Version.TryParse(Normalize(remote), out var remoteVersion)
-            && remoteVersion > currentVersion;
+        return ReleaseVersionUtility.IsNewer(current, remote);
     }
 
     private static string GetClientVersion()
     {
-        var version = Assembly.GetExecutingAssembly().GetName().Version;
-        return version is null ? "0.1.5" : $"{version.Major}.{version.Minor}.{version.Build}";
+        var assembly = Assembly.GetExecutingAssembly();
+        var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (!string.IsNullOrWhiteSpace(informational))
+        {
+            var displayVersion = informational.Split('+', 2)[0].Trim();
+            if (ReleaseVersionUtility.TryParse(displayVersion, out _))
+            {
+                return displayVersion;
+            }
+        }
+
+        var version = assembly.GetName().Version;
+        return version is null ? "0.1.8-beta.1" : $"{version.Major}.{version.Minor}.{version.Build}";
     }
 
     private static Panel CreateSurfacePanel() => new()
