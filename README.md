@@ -2,7 +2,7 @@
 
 Windows companion application for the **Azeroth Questing** World of Warcraft addon.
 
-## Development version - v0.1.5
+## Development version - v0.1.8-beta.2
 
 The latest public release remains v0.1.3 until trusted Windows code signing is approved and configured through SignPath Foundation.
 
@@ -10,21 +10,22 @@ The companion currently:
 
 - Detects a World of Warcraft Retail installation on Windows.
 - Detects the installed Azeroth Questing addon and its version.
-- Checks both the companion and Azeroth Questing addon for updates from GitHub.
+- Checks both the companion and Azeroth Questing addon for updates from GitHub, with **Stable** and **Beta** release channels.
 - Installs, updates, or repairs Azeroth Questing from the public `Frostcanvas/AzerothQuesting` GitHub repository.
 - Refuses to change addon files while World of Warcraft is running.
 - Backs up the existing Azeroth Questing addon before replacing it.
 - Watches only the current `AzerothQuesting.lua` SavedVariables data for changes.
 - Queues deduplicated **Pending Observations** under `%LOCALAPPDATA%\AzerothQuesting\Companion\Outbox` and synchronizes them to the Service01 Azeroth Questing API when synchronization is enabled.
-- Uses per-installation bearer registration; no shared Service01 secret is embedded in the public companion.
+- Uses per-installation bearer registration; no shared server secret is embedded in the public companion.
 - Uploads new v0.2.32+ structured quest observations with quest/map/evidence, faction, class, level, completion, source, and timestamps; older already-queued snapshots use the compatibility raw endpoint.
 - Runs in the Windows notification area so it can keep watching in the background.
 - Uses a dark dashboard-style interface with addon, update, WoW path, local data, and recent activity status.
+- Shows submitted research data in a privacy-preserving viewer with aggregate counts, recent anonymous observations, class evidence, and active addon/Companion version counts.
 - Installs as a normal Windows desktop application with Start Menu integration, Windows Installed Apps/uninstall registration, and a desktop shortcut selected by default on first install.
 
 The companion does not detect, migrate, delete, watch, or otherwise manage the retired ZoneQuestGuide addon or its SavedVariables.
 
-Service01 synchronization targets `http://10.0.10.246:8766` on the FrostLabs LAN. The dashboard includes a **Sync Pending Observations to Service01** checkbox and **Sync Now** action. If Service01 is unavailable, Pending Observations remain in the local Outbox and are retried later. Internet-facing synchronization is not enabled; a future public endpoint must use HTTPS and abuse controls.
+Azeroth Questing Server synchronization is configurable internally. The player-facing dashboard does not display the private FrostLabs host name or LAN address. It includes a **Sync Pending Observations to Azeroth Questing Server** checkbox, **Sync Now**, and a **Submitted Research Data** viewer. If the server is unavailable, Pending Observations remain in the local Outbox and are retried later. External testers still require the future HTTPS endpoint before server synchronization can work outside the FrostLabs LAN.
 
 ## Windows installation and updates
 
@@ -43,7 +44,7 @@ For companion updates, the app downloads the published setup package into `%LOCA
 
 This replaces the v0.1.1-v0.1.2 temporary self-copy updater, which executed an unsigned helper from a randomized temporary directory and could be blocked or mistaken for malware by endpoint-security products. v0.1.4 also attempts to clean up those legacy temporary updater files when they are no longer locked.
 
-Addon updates are reported in the same check. Use **Update Addon** to install the newest addon package. Addon updates are not applied while World of Warcraft is running.
+Addon updates are reported in the same check. Stable mode ignores GitHub prereleases; Beta mode considers both stable releases and GitHub prereleases and selects the newest compatible release. Use **Update Addon** to install the selected channel package. Addon updates are not applied while World of Warcraft is running.
 
 ## Code signing policy
 
@@ -79,7 +80,7 @@ Until SignPath approval and configuration are complete, development artifacts re
 
 The companion does **not** read World of Warcraft process memory, capture the screen, record gameplay, inspect other applications, or take screenshots. It only works with Azeroth Questing addon files and `AzerothQuesting.lua` SavedVariables on disk. Pending observations are stored in the local Outbox and use hashes rather than character/account names in their filenames.
 
-Beginning with development v0.1.5, Service01 synchronization can upload Pending Observations to the private FrostLabs API. Synchronization is enabled by default for the FrostLabs LAN build and can be disabled at any time from the dashboard; failed uploads remain local for retry. See `PRIVACY.md` for the exact observation fields.
+Azeroth Questing Server synchronization can upload Pending Observations to the private FrostLabs API. Synchronization can be disabled at any time from the dashboard; failed uploads remain local for retry. The Submitted Research Data viewer uses the same per-installation authentication to read privacy-preserving aggregates and anonymous observation rows. See `PRIVACY.md` for the exact observation fields.
 
 ## Build
 

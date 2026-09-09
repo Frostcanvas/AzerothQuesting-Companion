@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.8 Beta 2 - September 8, 2026
+
+- Added a **Submitted Research Data** viewer in the Companion with total observations, unique quests, active installation counts, this installation's contribution count, recent anonymous observations, class-evidence summaries, and active addon/Companion version counts.
+- Added authenticated Companion support for the Azeroth Questing Server research-dashboard API. The viewer does not expose installation IDs, account/character identifiers, bearer tokens, client observation keys, or raw SavedVariables payloads.
+- Restored the visible **Stable / Beta** update-channel control to the current dashboard so the existing channel-aware GitHub release logic is accessible to players.
+- Removed remaining player-facing `Service01` and private endpoint wording from the dashboard, sync status, dialogs, and privacy copy.
+- Fixed addon update status so an installed version that is newer than the selected channel is not incorrectly presented as an available update/downgrade.
+- Bumped the development Companion version to `0.1.8-beta.2`.
+- Requires Azeroth Questing Server API `0.2.1` for the Submitted Research Data viewer.
+
+This beta still needs testing on the player's Windows installation and against the live Azeroth Questing Server API `0.2.1`. A successful GitHub Actions build only confirms that the Windows application and installer compile/package; it does not count as live Windows, server, or in-game testing. The addon itself was not changed for this feature.
+
 ## 0.1.8 Beta 1 - September 8, 2026
 
 - Fixed Companion update comparison so semantic prerelease versions such as `0.1.8-beta.1` are recognized as newer than older stable or beta builds instead of being rejected by `System.Version` parsing.

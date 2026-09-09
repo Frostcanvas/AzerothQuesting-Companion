@@ -119,6 +119,61 @@ internal sealed partial class Service01Client : IDisposable
         await EnsureSuccessAsync(response, "status check", cancellationToken);
     }
 
+    public async Task<ResearchDashboardData> GetResearchDashboardAsync(
+        string companionVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        await EnsureRegisteredAsync(companionVersion, cancellationToken);
+
+        using var response = await SendAuthorizedGetAsync("/api/v1/research/dashboard", cancellationToken);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            ClearRegistration();
+            await EnsureRegisteredAsync(companionVersion, cancellationToken);
+            using var retry = await SendAuthorizedGetAsync("/api/v1/research/dashboard", cancellationToken);
+            return await ReadResearchDashboardAsync(retry, cancellationToken);
+        }
+
+        return await ReadResearchDashboardAsync(response, cancellationToken);
+    }
+
+    private async Task<HttpResponseMessage> SendAuthorizedGetAsync(
+        string relativePath,
+        CancellationToken cancellationToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, BaseUrl + relativePath);
+        request.Headers.UserAgent.ParseAdd("AzerothQuestingCompanion");
+        if (!string.IsNullOrWhiteSpace(_settings.InstallationToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.InstallationToken);
+        }
+
+        try
+        {
+            return await _httpClient.SendAsync(request, cancellationToken);
+        }
+        finally
+        {
+            request.Dispose();
+        }
+    }
+
+    private async Task<ResearchDashboardData> ReadResearchDashboardAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"Azeroth Questing server data request failed ({(int)response.StatusCode} {response.ReasonPhrase}): {TrimForError(body)}");
+        }
+
+        return JsonSerializer.Deserialize<ResearchDashboardData>(body, _jsonOptions)
+            ?? throw new InvalidDataException("Azeroth Questing server returned an empty research dashboard response.");
+    }
+
     private async Task EnsureRegisteredAsync(string companionVersion, CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(_settings.InstallationToken))
@@ -173,15 +228,15 @@ internal sealed partial class Service01Client : IDisposable
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException(
-                $"Service01 registration failed ({(int)response.StatusCode} {response.ReasonPhrase}): {TrimForError(body)}");
+                $"Azeroth Questing server registration failed ({(int)response.StatusCode} {response.ReasonPhrase}): {TrimForError(body)}");
         }
 
         var registration = JsonSerializer.Deserialize<RegistrationResponse>(body, _jsonOptions)
-            ?? throw new InvalidDataException("Service01 returned an empty registration response.");
+            ?? throw new InvalidDataException("Azeroth Questing server returned an empty registration response.");
 
         if (registration.InstallationId == Guid.Empty || string.IsNullOrWhiteSpace(registration.Token))
         {
-            throw new InvalidDataException("Service01 registration response did not contain a valid installation ID/token.");
+            throw new InvalidDataException("Azeroth Questing server registration response did not contain a valid installation ID/token.");
         }
 
         _settings.InstallationId = registration.InstallationId.ToString("D");
@@ -229,11 +284,11 @@ internal sealed partial class Service01Client : IDisposable
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException(
-                $"Service01 observation upload failed ({(int)response.StatusCode} {response.ReasonPhrase}): {TrimForError(body)}");
+                $"Azeroth Questing server observation upload failed ({(int)response.StatusCode} {response.ReasonPhrase}): {TrimForError(body)}");
         }
 
         return JsonSerializer.Deserialize<BatchResponse>(body, _jsonOptions)
-            ?? throw new InvalidDataException("Service01 returned an empty observation response.");
+            ?? throw new InvalidDataException("Azeroth Questing server returned an empty observation response.");
     }
 
     private async Task SendRawSnapshotWithRegistrationRetryAsync(

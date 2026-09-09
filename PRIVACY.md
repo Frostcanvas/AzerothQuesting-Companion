@@ -34,15 +34,21 @@ Pending Observation filenames use a timestamp and SHA-256 content hash rather th
 
 ## Network communication
 
-Beginning with development version 0.1.5, the companion can synchronize Pending Observations to the private FrostLabs Service01 Azeroth Questing API. The default FrostLabs LAN endpoint is `http://10.0.10.246:8766`. The dashboard provides a **Sync Pending Observations to Service01** checkbox and a manual **Sync Now** action. Turning the checkbox off keeps new Pending Observations local.
+The companion can synchronize Pending Observations to the Azeroth Questing Server. The player-facing application does not display the private FrostLabs host name or LAN address. The dashboard provides a **Sync Pending Observations to Azeroth Questing Server** checkbox and a manual **Sync Now** action. Turning the checkbox off keeps new Pending Observations local.
 
 For Azeroth Questing v0.2.32 and newer, structured uploads can include only addon-produced research fields: observation key, local/anonymous-peer source, quest ID, map ID, evidence type (`seen`, `available`, `offered`, `accepted`, `active`, or `turnedIn`), faction, World of Warcraft class ID/token, character level, quest completion state, observation timestamp, addon version, and companion version. The intended upload does not include character name, realm, BattleTag, guild, chat, party-member identity, GUID, screenshots, or gameplay recordings.
 
-The Service01 API assigns a random per-installation bearer token. The public companion does not contain a shared server secret. Service01 stores only the SHA-256 hash of the bearer token. If synchronization fails, the companion keeps the Pending Observation locally instead of deleting it.
+The Azeroth Questing Server assigns a random per-installation bearer token. The public companion does not contain a shared server secret. The server stores only the SHA-256 hash of the bearer token. If synchronization fails, the companion keeps the Pending Observation locally instead of deleting it.
 
 Older Pending Observation files created before the structured v0.2.32 handoff can be sent through a compatibility raw SavedVariables endpoint so existing queued research is not silently discarded. Those files are stored as data and are not executed as Lua by the server.
 
 The companion also accesses GitHub to check for and download official Azeroth Questing Companion and Azeroth Questing addon updates.
+
+## Submitted Research Data viewer
+
+The Companion can use its per-installation bearer token to read a privacy-preserving research summary from the Azeroth Questing Server. The viewer may show aggregate observation and quest counts, this installation's own contribution count, recent anonymous structured observations, class-evidence summaries, and active addon/Companion version counts.
+
+The viewer does **not** receive installation IDs, client observation keys, bearer-token hashes, raw SavedVariables payloads, character names, account identifiers, BattleTags, realm identifiers, screenshots, gameplay recordings, or IP history.
 
 ## Data deletion
 
