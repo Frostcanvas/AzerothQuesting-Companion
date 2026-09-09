@@ -28,6 +28,8 @@ OutputBaseFilename=AzerothQuestingCompanion-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\src\AzerothQuesting.Companion\Assets\AzerothQuesting.ico
+ChangesAssociations=yes
 CloseApplications=yes
 RestartApplications=yes
 SetupLogging=yes
@@ -35,7 +37,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 Uninstallable=yes
 UninstallDisplayName={#MyAppName}
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={app}\Assets\AzerothQuesting.ico
 VersionInfoVersion={#MyAppFileVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppFileVersion}
@@ -49,14 +51,20 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 Source: "..\publish\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Azeroth Questing Companion"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\Azeroth Questing Companion"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\Azeroth Questing Companion"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Assets\AzerothQuesting.ico"
+Name: "{autodesktop}\Azeroth Questing Companion"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Assets\AzerothQuesting.ico"; Tasks: desktopicon
+Name: "{autodesktop}\Azeroth Questing Companion"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Assets\AzerothQuesting.ico"; Check: DesktopShortcutExists
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch Azeroth Questing Companion"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: IsSilentInstall
 
 [Code]
+function DesktopShortcutExists: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{autodesktop}\Azeroth Questing Companion.lnk'));
+end;
+
 function IsSilentInstall: Boolean;
 begin
   Result := WizardSilent;

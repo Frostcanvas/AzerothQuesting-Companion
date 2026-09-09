@@ -39,6 +39,7 @@ internal sealed class DataViewerForm : Form
         _companionVersion = companionVersion;
 
         Text = "Azeroth Questing - Submitted Data";
+        Icon = AppIcon.Load();
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(980, 620);
         Size = new Size(1180, 720);

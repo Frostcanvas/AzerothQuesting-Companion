@@ -59,6 +59,7 @@ internal sealed class MainForm : Form
         _serviceClient = new Service01Client(_settings);
 
         Text = "Azeroth Questing Companion";
+        Icon = AppIcon.Load();
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(1040, 650);
         Size = new Size(1280, 760);
@@ -501,7 +502,7 @@ internal sealed class MainForm : Form
         _notifyIcon = new NotifyIcon
         {
             Text = "Azeroth Questing Companion",
-            Icon = SystemIcons.Application,
+            Icon = AppIcon.Load(),
             ContextMenuStrip = menu,
             Visible = true,
         };

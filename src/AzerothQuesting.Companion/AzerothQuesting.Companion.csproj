@@ -13,4 +13,10 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AzerothQuesting.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <None Update="Assets\AzerothQuesting.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
 </Project>
