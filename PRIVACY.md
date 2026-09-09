@@ -34,7 +34,7 @@ Pending Observation filenames use a timestamp and SHA-256 content hash rather th
 
 ## Network communication
 
-The companion can synchronize Pending Observations to the Azeroth Questing Server. The player-facing application does not display the private FrostLabs host name or LAN address. The dashboard provides a **Sync Pending Observations to Azeroth Questing Server** checkbox and a manual **Sync Now** action. Turning the checkbox off keeps new Pending Observations local.
+The companion can synchronize Pending Observations to the Azeroth Questing Server over HTTPS at `https://aq.frostlabs.dev`. The player-facing application refers to this service as **Azeroth Questing Server** rather than displaying the private FrostLabs LAN address. The dashboard provides a **Sync Pending Observations to Azeroth Questing Server** checkbox and a manual **Sync Now** action. Turning the checkbox off keeps new Pending Observations local.
 
 For Azeroth Questing v0.2.32 and newer, structured uploads can include only addon-produced research fields: observation key, local/anonymous-peer source, quest ID, map ID, evidence type (`seen`, `available`, `offered`, `accepted`, `active`, or `turnedIn`), faction, World of Warcraft class ID/token, character level, quest completion state, observation timestamp, addon version, and companion version. The intended upload does not include character name, realm, BattleTag, guild, chat, party-member identity, GUID, screenshots, or gameplay recordings.
 
@@ -45,6 +45,8 @@ Older Pending Observation files created before the structured v0.2.32 handoff ca
 The companion also accesses GitHub to check for and download official Azeroth Questing Companion and Azeroth Questing addon updates.
 
 While Azeroth Questing Server synchronization is enabled, the Companion sends a lightweight authenticated heartbeat every five minutes. The heartbeat updates the anonymous installation's last-seen time and may include Companion version, installed addon version, and Stable/Beta update channel so the research dashboard can report active-version counts and **Companions Online**. It does not include character name, account/BattleTag, Windows username, screenshots, chat, gameplay activity, or IP history. A Companion counts as online when the server has received a heartbeat within the last 10 minutes; this is an activity window rather than a permanent network connection.
+
+The public HTTPS ingress is limited to the Companion API routes required for registration, heartbeat, observation synchronization, Submitted Research Data, and collected-quest export. The full `/research` website and its unauthenticated website CSV export remain LAN-only and are not intended to be exposed through the public Companion hostname.
 
 ## Submitted Research Data viewer
 

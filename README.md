@@ -2,7 +2,7 @@
 
 Windows companion application for the **Azeroth Questing** World of Warcraft addon.
 
-## Development version - v0.1.8-beta.3
+## Development version - v0.1.9-beta.2
 
 The latest public release remains v0.1.3 until trusted Windows code signing is approved and configured through SignPath Foundation.
 
@@ -27,7 +27,9 @@ The companion currently:
 
 The companion does not detect, migrate, delete, watch, or otherwise manage the retired ZoneQuestGuide addon or its SavedVariables.
 
-Azeroth Questing Server synchronization is configurable internally. The player-facing dashboard does not display the private FrostLabs host name or LAN address. It includes a **Sync Pending Observations to Azeroth Questing Server** checkbox, **Sync Now**, and a **Submitted Research Data** viewer. If the server is unavailable, Pending Observations remain in the local Outbox and are retried later. The Submitted Research Data viewer works with API `0.2.1`; the new Companions Online heartbeat and collected-quest CSV export in v0.1.8-beta.3 require Azeroth Questing Server API `0.2.2`. External testers still require the future HTTPS endpoint before server synchronization can work outside the FrostLabs LAN.
+Azeroth Questing Server synchronization uses the dedicated HTTPS endpoint `https://aq.frostlabs.dev` by default. The player-facing dashboard refers to this service as **Azeroth Questing Server** rather than exposing the private FrostLabs LAN address. Installations that still have the exact legacy LAN default are migrated to the HTTPS endpoint automatically; manually configured custom endpoints are preserved. The dashboard includes a **Sync Pending Observations to Azeroth Questing Server** checkbox, **Sync Now**, and a **Submitted Research Data** viewer. If the server is unavailable, Pending Observations remain in the local Outbox and are retried later. The Submitted Research Data viewer works with API `0.2.1`; the Companions Online heartbeat and collected-quest CSV export require Azeroth Questing Server API `0.2.2` or newer.
+
+The public endpoint is intended for controlled external beta testing. It is not considered working until Cloudflare DNS and the Services01 Caddy route have been deployed and a real outside-network Companion has successfully registered, heartbeated, and synchronized. The public reverse proxy exposes only the required Companion `/api/v1` routes; the full `/research` website remains LAN-only.
 
 ## Windows installation and updates
 
@@ -82,7 +84,7 @@ Until SignPath approval and configuration are complete, development artifacts re
 
 The companion does **not** read World of Warcraft process memory, capture the screen, record gameplay, inspect other applications, or take screenshots. It only works with Azeroth Questing addon files and `AzerothQuesting.lua` SavedVariables on disk. Pending observations are stored in the local Outbox and use hashes rather than character/account names in their filenames.
 
-Azeroth Questing Server synchronization can upload Pending Observations to the private FrostLabs API. Synchronization can be disabled at any time from the dashboard; failed uploads remain local for retry. The Submitted Research Data viewer uses the same per-installation authentication to read privacy-preserving aggregates and anonymous observation rows. See `PRIVACY.md` for the exact observation fields.
+Azeroth Questing Server synchronization can upload Pending Observations to the dedicated HTTPS API at `https://aq.frostlabs.dev`. Synchronization can be disabled at any time from the dashboard; failed uploads remain local for retry. The Submitted Research Data viewer uses the same per-installation authentication to read privacy-preserving aggregates and anonymous observation rows. See `PRIVACY.md` for the exact observation fields.
 
 ## Build
 

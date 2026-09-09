@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.9 Beta 2 - September 8, 2026
+
+- Changed the default Azeroth Questing Server endpoint from the private FrostLabs LAN address to the dedicated public HTTPS endpoint `https://aq.frostlabs.dev`, enabling controlled outside-network beta testing once the public ingress is deployed.
+- Added a one-time settings migration for installations still using the exact legacy LAN default. Existing manually configured custom endpoints are preserved.
+- Kept the existing anonymous per-installation bearer registration/authentication model; no shared backend secret was added to the Companion.
+- Kept the public ingress limited to the required Companion `/api/v1` endpoints. The full `/research` website remains LAN-only.
+- Bumped the development Companion version to `0.1.9-beta.2` and the numeric Windows file version to `0.1.8.7`.
+
+This beta still needs Windows and outside-network testing. Cloudflare DNS and the Services01 Caddy route must be deployed before the public endpoint can work. After that, verify an outside-network Companion can register, heartbeat, view Submitted Research Data, and sync Pending Observations. Do not consider the external route tested until that real test is performed. The Azeroth Questing addon was not changed.
+
 ## 0.1.9 Beta 1 - September 8, 2026
 
 - Started the `0.1.9` beta train using canonical GitHub/updater version `0.1.9-beta.1` while presenting it to players as **0.1.9 Beta 1** inside the Companion.

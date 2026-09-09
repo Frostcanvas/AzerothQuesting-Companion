@@ -26,7 +26,7 @@ internal sealed class CompanionSettings
 {
     public string? WowRetailPath { get; set; }
     public bool ServiceSyncEnabled { get; set; } = true;
-    public string ServiceBaseUrl { get; set; } = "http://10.0.10.246:8766";
+    public string ServiceBaseUrl { get; set; } = SettingsService.DefaultServiceBaseUrl;
     public string UpdateChannel { get; set; } = "stable";
     public string? ClientInstanceId { get; set; }
     public string? InstallationId { get; set; }
@@ -35,6 +35,9 @@ internal sealed class CompanionSettings
 
 internal static class SettingsService
 {
+    public const string DefaultServiceBaseUrl = "https://aq.frostlabs.dev";
+    private const string LegacyLanServiceBaseUrl = "http://10.0.10.246:8766";
+
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
@@ -52,7 +55,19 @@ internal static class SettingsService
             }
 
             var json = File.ReadAllText(AppPaths.SettingsFile);
-            return JsonSerializer.Deserialize<CompanionSettings>(json, Options) ?? new CompanionSettings();
+            var settings = JsonSerializer.Deserialize<CompanionSettings>(json, Options) ?? new CompanionSettings();
+
+            if (string.IsNullOrWhiteSpace(settings.ServiceBaseUrl) ||
+                string.Equals(
+                    settings.ServiceBaseUrl.Trim().TrimEnd('/'),
+                    LegacyLanServiceBaseUrl,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                settings.ServiceBaseUrl = DefaultServiceBaseUrl;
+                Save(settings);
+            }
+
+            return settings;
         }
         catch
         {
