@@ -1,0 +1,96 @@
+name: One-time v0.1.8 addon version direction patch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Patch addon update direction
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/AzerothQuesting.Companion/MainForm.cs")
+          text = path.read_text(encoding="utf-8")
+
+          old_summary = '''                            : VersionsMatch(installedAddon, addon.Version)
+                                ? $"Addon: {installedAddon} is up to date"
+                                : $"Addon: update {addon.Version} is available (installed {installedAddon})";
+'''
+          new_summary = '''                            : VersionsMatch(installedAddon, addon.Version)
+                                ? $"Addon: {installedAddon} is up to date"
+                                : IsNewerVersion(installedAddon, addon.Version)
+                                    ? $"Addon: update {addon.Version} is available (installed {installedAddon})"
+                                    : $"Addon: installed {installedAddon} is newer than the selected channel release {addon.Version}";
+'''
+
+          old_status = '''        else if (VersionsMatch(installed, remote.Version))
+        {
+            _installedAddonValue.Text = installed;
+            _heroStatusValue.Text = $"Addon installed - {installed} is current";
+            _heroStatusValue.ForeColor = Green;
+            _installButton.Text = "Reinstall Addon";
+        }
+        else
+        {
+            _installedAddonValue.Text = installed;
+            _heroStatusValue.Text = $"Addon update {remote.Version} available";
+            _heroStatusValue.ForeColor = Gold;
+            _installButton.Text = "Update Addon";
+        }
+'''
+          new_status = '''        else if (VersionsMatch(installed, remote.Version))
+        {
+            _installedAddonValue.Text = installed;
+            _heroStatusValue.Text = $"Addon installed - {installed} is current";
+            _heroStatusValue.ForeColor = Green;
+            _installButton.Text = "Reinstall Addon";
+        }
+        else if (IsNewerVersion(installed, remote.Version))
+        {
+            _installedAddonValue.Text = installed;
+            _heroStatusValue.Text = $"Addon update {remote.Version} available";
+            _heroStatusValue.ForeColor = Gold;
+            _installButton.Text = "Update Addon";
+        }
+        else
+        {
+            _installedAddonValue.Text = installed;
+            _heroStatusValue.Text = $"Installed addon {installed} is newer than channel version {remote.Version}";
+            _heroStatusValue.ForeColor = Green;
+            _installButton.Text = "Install Channel Version";
+        }
+'''
+
+          if text.count(old_summary) != 1:
+              raise SystemExit(f"Expected one addon summary block, found {text.count(old_summary)}")
+          if text.count(old_status) != 1:
+              raise SystemExit(f"Expected one addon status block, found {text.count(old_status)}")
+
+          text = text.replace(old_summary, new_summary, 1)
+          text = text.replace(old_status, new_status, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/AzerothQuesting.Companion/MainForm.cs
+          git commit -m "Prevent channel checks from offering addon downgrades [skip ci]"
+          git push
