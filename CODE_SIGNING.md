@@ -42,6 +42,10 @@ The Windows release pipeline is designed to:
 
 The SignPath API token is stored only as a GitHub Actions secret. SignPath organization, project, signing-policy, and artifact-configuration identifiers are stored as repository variables.
 
+## Temporary Beta testing exception
+
+The unsigned-Beta exception exists only while SignPath approval/configuration is pending. It permits GitHub **Pre-release** testing builds so the Companion self-updater can be exercised now; it does not authorize an unsigned Stable release.
+
 ## Privacy policy
 
 See [PRIVACY.md](PRIVACY.md) for the current Companion data-collection and synchronization policy.
