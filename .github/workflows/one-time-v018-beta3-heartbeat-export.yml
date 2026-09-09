@@ -1,0 +1,36 @@
+name: One-time v0.1.8 beta 3 heartbeat and export patch
+
+on:
+  push:
+    paths:
+      - .github/workflows/one-time-v018-beta3-heartbeat-export.yml
+      - .github/one-time-v018-beta3-heartbeat-export.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Apply Companion beta 3 changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/one-time-v018-beta3-heartbeat-export.py
+          git diff --check
+
+      - name: Commit Companion beta 3 changes and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/one-time-v018-beta3-heartbeat-export.yml
+          rm -f .github/one-time-v018-beta3-heartbeat-export.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add online Companion count and quest CSV export in v0.1.8-beta.3"
+          git push
