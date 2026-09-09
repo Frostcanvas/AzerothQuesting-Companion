@@ -52,12 +52,23 @@ jobs:
           }
           Get-Item $exe | Format-List Name,Length,LastWriteTime
 
-      - name: Validate SignPath release configuration
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+      - name: Determine release and signing mode
+        id: release_meta
         shell: pwsh
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
         run: |
+          $project = [xml](Get-Content "src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj")
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Could not read companion version from the project file."
+          }
+
+          $isRelease = $env:EVENT_NAME -eq "push" -and $env:COMMIT_MESSAGE.StartsWith("Release companion v")
+          $isPrerelease = $version.Contains("-")
+
           $required = @{
             SIGNPATH_API_TOKEN = $env:SIGNPATH_API_TOKEN
             SIGNPATH_ORGANIZATION_ID = $env:SIGNPATH_ORGANIZATION_ID
@@ -74,14 +85,27 @@ jobs:
             }
           }
 
-          if ($missing.Count -gt 0) {
-            throw "Public releases require SignPath configuration. Missing: $($missing -join ', ')"
+          $signingConfigured = $missing.Count -eq 0
+          $signingEnabled = $isRelease -and $signingConfigured
+
+          if ($isRelease -and -not $isPrerelease -and -not $signingConfigured) {
+            throw "Stable Companion releases require SignPath configuration. Missing: $($missing -join ', ')"
           }
 
-          Write-Host "SignPath release configuration is present."
+          if ($isRelease -and $isPrerelease -and -not $signingConfigured) {
+            Write-Warning "SignPath is not fully configured. Publishing this Beta as an explicitly unsigned GitHub Pre-release for testing. Missing: $($missing -join ', ')"
+          }
+          elseif ($signingEnabled) {
+            Write-Host "SignPath release configuration is present; this release will be signed."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "is_release=$($isRelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "is_prerelease=$($isPrerelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "signing_enabled=$($signingEnabled.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
       - name: Upload unsigned companion executable for SignPath
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+        if: steps.release_meta.outputs.signing_enabled == 'true'
         id: upload_unsigned_executable
         uses: actions/upload-artifact@v4
         with:
@@ -91,7 +115,7 @@ jobs:
           retention-days: 7
 
       - name: Sign companion executable with SignPath
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+        if: steps.release_meta.outputs.signing_enabled == 'true'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -105,7 +129,7 @@ jobs:
           output-artifact-directory: ${{ github.workspace }}/publish/signpath/executable
 
       - name: Promote and verify signed companion executable
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+        if: steps.release_meta.outputs.signing_enabled == 'true'
         shell: pwsh
         run: |
           $signed = Get-ChildItem "publish/signpath/executable" -Filter "AzerothQuestingCompanion.exe" -File -Recurse | Select-Object -First 1
@@ -156,7 +180,7 @@ jobs:
           Get-FileHash $setup -Algorithm SHA256 | Format-List
 
       - name: Upload unsigned Windows installer for SignPath
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+        if: steps.release_meta.outputs.signing_enabled == 'true'
         id: upload_unsigned_installer
         uses: actions/upload-artifact@v4
         with:
@@ -166,7 +190,7 @@ jobs:
           retention-days: 7
 
       - name: Sign Windows installer with SignPath
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+        if: steps.release_meta.outputs.signing_enabled == 'true'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -180,7 +204,7 @@ jobs:
           output-artifact-directory: ${{ github.workspace }}/publish/signpath/installer
 
       - name: Promote and verify signed Windows installer
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+        if: steps.release_meta.outputs.signing_enabled == 'true'
         shell: pwsh
         run: |
           $signed = Get-ChildItem "publish/signpath/installer" -Filter "AzerothQuestingCompanion-Setup.exe" -File -Recurse | Select-Object -First 1
@@ -196,7 +220,7 @@ jobs:
           }
 
       - name: Upload unsigned development installer
-        if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Release companion v')
+        if: steps.release_meta.outputs.is_release != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: AzerothQuestingCompanion-Setup-UNSIGNED-DEVELOPMENT
@@ -204,23 +228,31 @@ jobs:
           if-no-files-found: error
 
       - name: Upload signed release installer artifact
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+        if: steps.release_meta.outputs.is_release == 'true' && steps.release_meta.outputs.signing_enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: AzerothQuestingCompanion-Setup-SIGNED
           path: publish/installer/AzerothQuestingCompanion-Setup.exe
           if-no-files-found: error
 
-      - name: Publish signed GitHub Release
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release companion v')
+      - name: Upload unsigned Beta release installer artifact
+        if: steps.release_meta.outputs.is_release == 'true' && steps.release_meta.outputs.is_prerelease == 'true' && steps.release_meta.outputs.signing_enabled != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AzerothQuestingCompanion-Setup-UNSIGNED-BETA
+          path: publish/installer/AzerothQuestingCompanion-Setup.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: steps.release_meta.outputs.is_release == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGNING_ENABLED: ${{ steps.release_meta.outputs.signing_enabled }}
         run: |
-          $project = [xml](Get-Content "src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj")
-          $version = [string]$project.Project.PropertyGroup.Version
+          $version = "${{ steps.release_meta.outputs.version }}"
           if ([string]::IsNullOrWhiteSpace($version)) {
-            throw "Could not read companion version from the project file."
+            throw "Release metadata did not include a Companion version."
           }
 
           $tag = "companion-v$version"
@@ -237,17 +269,31 @@ jobs:
             }
           }
 
-          $policyHeader = @"
+          if ($env:SIGNING_ENABLED -eq "true") {
+            $policyHeader = @"
           **Code signing policy**
+
+          This installer was signed through SignPath.
 
           Free code signing provided by SignPath.io, certificate by SignPath Foundation.
 
           Code signing policy: https://github.com/Frostcanvas/AzerothQuesting-Companion/blob/main/CODE_SIGNING.md
           Privacy policy: https://github.com/Frostcanvas/AzerothQuesting-Companion/blob/main/PRIVACY.md
           "@
+          }
+          else {
+            $policyHeader = @"
+          **Unsigned Beta testing build**
+
+          This GitHub Pre-release is intentionally unsigned while Azeroth Questing Companion is waiting for SignPath code-signing approval/configuration. Windows SmartScreen or security software may warn before installation. Stable releases remain blocked unless they are signed.
+
+          Code signing policy: https://github.com/Frostcanvas/AzerothQuesting-Companion/blob/main/CODE_SIGNING.md
+          Privacy policy: https://github.com/Frostcanvas/AzerothQuesting-Companion/blob/main/PRIVACY.md
+          "@
+          }
 
           $body = gh release view $tag --json body --jq '.body'
-          if ($body -notmatch 'Code signing policy') {
+          if ($body -notmatch 'Unsigned Beta testing build' -and $body -notmatch 'Code signing policy') {
             $combined = "$policyHeader`r`n`r`n$body"
             Set-Content -Path "release-notes.tmp.md" -Value $combined -Encoding UTF8
             gh release edit $tag --notes-file "release-notes.tmp.md"
