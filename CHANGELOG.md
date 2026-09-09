@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.8 Beta 1 - September 8, 2026
+
+- Fixed Companion update comparison so semantic prerelease versions such as `0.1.8-beta.1` are recognized as newer than older stable or beta builds instead of being rejected by `System.Version` parsing.
+- Changed Beta-channel release discovery for both **Azeroth Questing Companion** and the **Azeroth Questing addon** to scan GitHub Releases, include both normal public releases and GitHub prereleases, and select the highest semantic version with a usable release asset.
+- Kept Stable mode restricted to normal public GitHub releases; addon source from `main` is still used only as a fallback when the addon repository has no usable release package.
+- Added prerelease ordering so, for the same base version, a stable release sorts newer than its beta build and numbered beta builds sort correctly (`beta.2` newer than `beta.1`).
+- Changed the Companion version display to use its informational version so beta builds can show the full prerelease label instead of only the numeric assembly version.
+- Updated the Windows installer build to keep a numeric Windows file version while allowing a player-facing prerelease product version.
+- Updated the signed-release workflow so versions containing a prerelease suffix are published as GitHub **Pre-release** releases instead of accidentally becoming Stable releases.
+- Bumped the development Companion version to `0.1.8-beta.1`.
+
+This beta update still needs testing on the player's Windows installation. In particular, publish a signed GitHub prerelease after SignPath approval, then verify a Companion on the Beta channel detects and installs it while Stable ignores it. Also verify Beta detects a prerelease `AzerothQuesting.zip` addon package when one is published. The unsigned development installer is for local testing only while SignPath Foundation approval is pending.
+
+## 0.1.7 Beta - September 8, 2026
+
+- Removed the private FrostLabs server hostname/IP details and `Service01` wording from player-facing Companion controls, status messages, activity entries, and sync dialogs.
+- Changed player-facing synchronization wording to **Azeroth Questing Server** while retaining the existing private test endpoint internally so current LAN synchronization continues to work until the public HTTPS endpoint is deployed.
+- Bumped the development Companion version to 0.1.7.
+
+The v0.1.7 development installer compiled and packaged successfully in GitHub Actions. The internal endpoint remained unchanged, so external testers still require the future public HTTPS endpoint before server synchronization can work outside the FrostLabs LAN. The build remained unsigned while SignPath Foundation approval was pending.
+
 ## 0.1.6 Beta - September 8, 2026
 
 - Added a **Stable / Beta** update-channel selector directly to the Companion top bar.
@@ -40,7 +61,7 @@ The v0.1.5 Service01 client code has not yet been tested against the live Servic
 - Changed development build artifacts to be clearly labeled as unsigned and made public release publishing depend on completed SignPath signing.
 - Added SignPath code-signing policy information to future GitHub Release notes.
 
-The v0.1.4 source still needs testing on the player's Windows installation. SignPath Foundation approval and the resulting SignPath project/API configuration are still required before v0.1.4 can be published as a signed public release. Until trusted signing is active, development artifacts remain unsigned and Windows SmartScreen or endpoint protection can still warn about them. Service01 uploading remains disabled; Pending Observations stay local.
+The v0.1.4 source still needs testing on the player's Windows installation. SignPath Foundation approval and the resulting SignPath project/API configuration are still required before v0.1.4 can be published as a signed public release. Until trusted signing is active, development artifacts remain unsigned and Windows SmartScreen or endpoint protection can still warn about it. Service01 uploading remains disabled; Pending Observations stay local.
 
 ## 0.1.3 - September 8, 2026
 
