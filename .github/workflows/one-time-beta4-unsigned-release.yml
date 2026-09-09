@@ -1,0 +1,58 @@
+name: One-time finalize Companion 0.1.9 Beta 4 unsigned testing release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Update Beta 4 changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('CHANGELOG.md')
+          text = path.read_text(encoding='utf-8')
+
+          anchor = '- The previous Beta 3 release attempt built the application successfully but stopped at the SignPath configuration validation step before signing, installer creation, or GitHub Pre-release publication. No signed Beta 3 installer was published.\n'
+          addition = '''- Changed the GitHub release pipeline so Companion Beta builds may be published as explicitly unsigned GitHub Pre-releases while SignPath approval/configuration is pending. The updater-visible asset remains `AzerothQuestingCompanion-Setup.exe`, so Beta-channel Companion installations can exercise normal self-update behavior without waiting for SignPath.\n- Kept Stable publication protected: a Stable Companion release still fails closed when SignPath configuration is missing and cannot be published unsigned. When SignPath becomes available, Beta and Stable releases can use the signed path without changing the updater asset name.\n'''
+          if addition not in text:
+              if anchor not in text:
+                  raise SystemExit('Could not find Beta 4 changelog insertion point')
+              text = text.replace(anchor, anchor + addition, 1)
+
+          old = 'Beta 4 still requires Windows testing. Verify the Companion checks for updates at startup without a no-update popup, repeats the check after roughly 30 minutes, checks again after a successful data sync, still allows the manual **Check for Updates** action, does not auto-install addon updates, and continues to stage/restart for an eligible Companion self-update. Public Companion publication still requires valid SignPath repository configuration and a signed installer; no signing success is claimed.'
+          new = 'Beta 4 still requires Windows testing. Verify the Companion checks for updates at startup without a no-update popup, repeats the check after roughly 30 minutes, checks again after a successful data sync, still allows the manual **Check for Updates** action, does not auto-install addon updates, and can discover, stage, install, restart into, and report the unsigned `0.1.9-beta.4` GitHub Pre-release through the Beta channel. Windows may show SmartScreen or publisher warnings because this temporary Beta installer is unsigned. No signing success is claimed. Stable Companion releases still require SignPath and must never be published unsigned.'
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('Could not find Beta 4 testing paragraph')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Remove one-time workflow and publish release commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Frostcanvas"
+          git config user.email "131615585+Frostcanvas@users.noreply.github.com"
+          git rm .github/workflows/one-time-beta4-unsigned-release.yml
+          git add CHANGELOG.md
+          git commit -m "Release companion v0.1.9-beta.4"
+          git push origin HEAD:main
