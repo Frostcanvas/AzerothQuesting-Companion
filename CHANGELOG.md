@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.9 Beta 1 - September 8, 2026
+
+- Started the `0.1.9` beta train using canonical GitHub/updater version `0.1.9-beta.1` while presenting it to players as **0.1.9 Beta 1** inside the Companion.
+- Added player-facing version cleanup so beta and release-candidate strings shown in dashboard controls, status text, activity history, and Companion dialogs use readable labels such as `0.1.9 Beta 1` and `0.1.9 RC 1` instead of raw prerelease syntax.
+- Applied the same readable beta formatting to addon and Companion versions shown in the Submitted Research Data viewer while leaving the underlying version values suitable for update comparison and research/version tracking.
+- Changed the Windows numeric file-version train to `0.1.8.6` for this beta. This keeps the hidden numeric build moving forward from the previous `0.1.8.5` beta build while leaving room for the golden `0.1.9` release to use the newer numeric file version `0.1.9.0`.
+- Kept GitHub tags/releases and updater comparison on canonical prerelease versions such as `0.1.9-beta.1`; the friendly **Beta 1** wording is a player-facing presentation layer only.
+
+This beta still needs Windows testing. Verify that the Companion displays **0.1.9 Beta 1** in player-facing surfaces, still compares GitHub prereleases correctly, and continues reporting/updating normally. The Azeroth Questing addon itself was not changed and remains `0.2.32`; the same beta/golden version model is intended for its next beta train.
+
 ## 0.1.8 Beta 5 - September 8, 2026
 
 - Extended the Apple-style Beta train behavior to the Azeroth Questing addon as well as the Companion.
