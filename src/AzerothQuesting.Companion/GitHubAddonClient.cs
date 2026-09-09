@@ -20,41 +20,20 @@ internal sealed class GitHubAddonClient : IDisposable
         {
             Timeout = TimeSpan.FromSeconds(45),
         };
-        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("AzerothQuestingCompanion", "0.1.4"));
+        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("AzerothQuestingCompanion", "0.1.6"));
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
     }
 
     public async Task<RemoteAddonPackage> GetLatestAddonAsync(CancellationToken cancellationToken = default)
     {
-        var releaseUrl = $"https://api.github.com/repos/{Owner}/{AddonRepository}/releases/latest";
-        using (var releaseResponse = await _httpClient.GetAsync(releaseUrl, cancellationToken))
+        var channel = UpdateChannelSettings.Parse(SettingsService.Load().UpdateChannel);
+        var release = channel == UpdateChannel.Beta
+            ? await GetAddonFromReleaseListAsync(cancellationToken)
+            : await GetStableAddonReleaseAsync(cancellationToken);
+
+        if (release is not null)
         {
-            if (releaseResponse.IsSuccessStatusCode)
-            {
-                await using var stream = await releaseResponse.Content.ReadAsStreamAsync(cancellationToken);
-                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-                var root = document.RootElement;
-                var tag = root.TryGetProperty("tag_name", out var tagValue) ? tagValue.GetString() : null;
-                var version = NormalizeVersion(tag);
-
-                if (root.TryGetProperty("assets", out var assets))
-                {
-                    foreach (var asset in assets.EnumerateArray())
-                    {
-                        var name = asset.TryGetProperty("name", out var nameValue) ? nameValue.GetString() : null;
-                        if (!string.Equals(name, "AzerothQuesting.zip", StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        var url = asset.TryGetProperty("browser_download_url", out var urlValue) ? urlValue.GetString() : null;
-                        if (!string.IsNullOrWhiteSpace(url))
-                        {
-                            return new RemoteAddonPackage(version ?? "unknown", url, true);
-                        }
-                    }
-                }
-            }
+            return release;
         }
 
         var tocUrl = $"https://raw.githubusercontent.com/{Owner}/{AddonRepository}/main/AzerothQuesting.toc";
@@ -66,20 +45,117 @@ internal sealed class GitHubAddonClient : IDisposable
 
     public async Task<RemoteCompanionPackage?> GetLatestCompanionAsync(CancellationToken cancellationToken = default)
     {
+        var channel = UpdateChannelSettings.Parse(SettingsService.Load().UpdateChannel);
+        return channel == UpdateChannel.Beta
+            ? await GetCompanionFromReleaseListAsync(cancellationToken)
+            : await GetStableCompanionReleaseAsync(cancellationToken);
+    }
+
+    private async Task<RemoteAddonPackage?> GetStableAddonReleaseAsync(CancellationToken cancellationToken)
+    {
+        var releaseUrl = $"https://api.github.com/repos/{Owner}/{AddonRepository}/releases/latest";
+        using var response = await _httpClient.GetAsync(releaseUrl, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return TryReadAddonRelease(document.RootElement);
+    }
+
+    private async Task<RemoteAddonPackage?> GetAddonFromReleaseListAsync(CancellationToken cancellationToken)
+    {
+        var releasesUrl = $"https://api.github.com/repos/{Owner}/{AddonRepository}/releases?per_page=30";
+        using var response = await _httpClient.GetAsync(releasesUrl, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        foreach (var release in document.RootElement.EnumerateArray())
+        {
+            if (IsDraft(release))
+            {
+                continue;
+            }
+
+            var package = TryReadAddonRelease(release);
+            if (package is not null)
+            {
+                return package;
+            }
+        }
+        return null;
+    }
+
+    private async Task<RemoteCompanionPackage?> GetStableCompanionReleaseAsync(CancellationToken cancellationToken)
+    {
         var releaseUrl = $"https://api.github.com/repos/{Owner}/{CompanionRepository}/releases/latest";
-        using var releaseResponse = await _httpClient.GetAsync(releaseUrl, cancellationToken);
-        if (releaseResponse.StatusCode == HttpStatusCode.NotFound)
+        using var response = await _httpClient.GetAsync(releaseUrl, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return TryReadCompanionRelease(document.RootElement);
+    }
+
+    private async Task<RemoteCompanionPackage?> GetCompanionFromReleaseListAsync(CancellationToken cancellationToken)
+    {
+        var releasesUrl = $"https://api.github.com/repos/{Owner}/{CompanionRepository}/releases?per_page=30";
+        using var response = await _httpClient.GetAsync(releasesUrl, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        foreach (var release in document.RootElement.EnumerateArray())
+        {
+            if (IsDraft(release))
+            {
+                continue;
+            }
+
+            var package = TryReadCompanionRelease(release);
+            if (package is not null)
+            {
+                return package;
+            }
+        }
+        return null;
+    }
+
+    private static RemoteAddonPackage? TryReadAddonRelease(JsonElement root)
+    {
+        var tag = root.TryGetProperty("tag_name", out var tagValue) ? tagValue.GetString() : null;
+        var version = NormalizeVersion(tag);
+        if (!root.TryGetProperty("assets", out var assets))
         {
             return null;
         }
 
-        releaseResponse.EnsureSuccessStatusCode();
-        await using var stream = await releaseResponse.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-        var root = document.RootElement;
+        foreach (var asset in assets.EnumerateArray())
+        {
+            var name = asset.TryGetProperty("name", out var nameValue) ? nameValue.GetString() : null;
+            if (!string.Equals(name, "AzerothQuesting.zip", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var url = asset.TryGetProperty("browser_download_url", out var urlValue) ? urlValue.GetString() : null;
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                return new RemoteAddonPackage(version ?? "unknown", url, true);
+            }
+        }
+
+        return null;
+    }
+
+    private static RemoteCompanionPackage? TryReadCompanionRelease(JsonElement root)
+    {
         var tag = root.TryGetProperty("tag_name", out var tagValue) ? tagValue.GetString() : null;
         var version = NormalizeVersion(tag);
-
         if (!root.TryGetProperty("assets", out var assets))
         {
             return null;
@@ -103,6 +179,9 @@ internal sealed class GitHubAddonClient : IDisposable
 
         return null;
     }
+
+    private static bool IsDraft(JsonElement release) =>
+        release.TryGetProperty("draft", out var draftValue) && draftValue.ValueKind == JsonValueKind.True;
 
     public async Task DownloadAsync(string url, string destination, CancellationToken cancellationToken = default)
     {

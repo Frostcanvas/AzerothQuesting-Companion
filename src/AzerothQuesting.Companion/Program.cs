@@ -9,6 +9,7 @@ internal static class Program
         CompanionUpdateService.CleanupStaleUpdateDirectories();
 
         var form = new MainForm();
+        UpdateChannelUi.Attach(form);
         UiTerminology.Apply(form);
         Application.Run(form);
     }
