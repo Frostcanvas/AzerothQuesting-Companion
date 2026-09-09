@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.9 Beta 4 - September 9, 2026
+## 0.1.9 Beta 4 - September 9, 2026 - Available on GitHub Pre-release
 
 - Added an automatic GitHub update check when the Companion finishes starting. The same Stable/Beta channel rules used by the manual **Check for Updates** button are used for this startup check.
 - Added a background update check every 30 minutes while the Companion remains open. Background checks update the dashboard/activity status without showing the normal no-update information dialog.
