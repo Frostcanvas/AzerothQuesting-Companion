@@ -45,3 +45,19 @@ The beta seed and Windows build component do not have to be the same number. Git
 - Beta channel can receive newer GitHub Pre-releases and later Stable/golden releases.
 - A Beta installation is never downgraded to an older Stable release.
 - Every release-worthy change enters Beta first. Stable promotion requires explicit approval.
+
+## Continuous changelog workflow
+
+`CHANGELOG.md` is maintained continuously during development rather than reconstructed at release time.
+
+- Every release-worthy Companion change must update `CHANGELOG.md` in the same development change that bumps the Companion version.
+- Each Beta section describes the delta from the immediately previous Beta or Stable build. For example, `0.1.9 Beta 2` records what changed after `0.1.9 Beta 1`; it does not silently rewrite the Beta 1 history.
+- Additional fixes before Stable increment the Beta seed and create a new changelog section (`beta.1` -> `beta.2` -> `beta.3`).
+- Keep all Beta sections after the golden release so the complete test history remains available.
+- When Stable/golden release is explicitly approved, add a new Stable section that consolidates the player-visible changes since the previous Stable release, removes duplicate wording, and is suitable for GitHub/distribution release notes.
+- The Stable summary does not erase or replace the individual Beta sections.
+- Record compatibility requirements when a Companion build depends on a particular Azeroth Questing addon or server/API version.
+- Record only tests that actually occurred. Windows, live-server, and in-game testing remain explicitly pending until they are performed.
+- When preparing a GitHub Release or another distribution listing, use the matching `CHANGELOG.md` section as the release-note source instead of trying to reconstruct the changes from commit history.
+
+Documentation-only maintenance does not force a new Companion version unless it changes release behavior or player-facing application behavior.
