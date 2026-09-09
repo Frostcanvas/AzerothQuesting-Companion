@@ -1,4 +1,4 @@
-name: One-time restore valid Companion Windows icon
+name: One-time recover Companion Windows icon
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  restore:
+  recover:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,24 +20,88 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Restore last known-good multi-resolution icon
+      - name: Install Pillow
+        run: python3 -m pip install --disable-pip-version-check pillow
+
+      - name: Recover artwork and build valid Windows icon
         shell: bash
         run: |
           set -euo pipefail
-          git checkout e5793d68203d96b660a0032f22a9a8f8012a6743 -- src/AzerothQuesting.Companion/Assets/AzerothQuesting.ico
-
           python3 - <<'PY'
+          from io import BytesIO
           from pathlib import Path
           import struct
+          import subprocess
 
-          path = Path('src/AzerothQuesting.Companion/Assets/AzerothQuesting.ico')
-          data = path.read_bytes()
+          from PIL import Image, ImageFile
+
+          ImageFile.LOAD_TRUNCATED_IMAGES = True
+          icon_path = Path('src/AzerothQuesting.Companion/Assets/AzerothQuesting.ico')
+          current = icon_path.read_bytes()
+
+          sources = [('current', current)]
+          for ref in (
+              '5ef43c3c03787e07b01b1029876768a084703816',
+              'e5793d68203d96b660a0032f22a9a8f8012a6743',
+          ):
+              try:
+                  data = subprocess.check_output([
+                      'git', 'show', f'{ref}:src/AzerothQuesting.Companion/Assets/AzerothQuesting.ico'
+                  ])
+                  sources.append((ref[:7], data))
+              except subprocess.CalledProcessError:
+                  pass
+
+          image = None
+          used_source = None
+          png_sig = b'\x89PNG\r\n\x1a\n'
+
+          for name, data in sources:
+              candidates = []
+              start = 0
+              while True:
+                  pos = data.find(png_sig, start)
+                  if pos < 0:
+                      break
+                  candidates.append(data[pos:])
+                  start = pos + 1
+
+              # Also let Pillow try the whole historical ICO in case one copy is readable.
+              candidates.append(data)
+
+              for candidate in candidates:
+                  try:
+                      with Image.open(BytesIO(candidate)) as probe:
+                          probe.load()
+                          recovered = probe.convert('RGBA')
+                          if recovered.width >= 32 and recovered.height >= 32:
+                              image = recovered.copy()
+                              used_source = name
+                              break
+                  except Exception:
+                      continue
+              if image is not None:
+                  break
+
+          if image is None:
+              raise SystemExit('Could not recover the Azeroth Questing artwork from any repository icon copy')
+
+          print(f'Recovered artwork from {used_source}: {image.size}')
+          output = icon_path.with_suffix('.recovered.ico')
+          image.save(
+              output,
+              format='ICO',
+              sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64)],
+              bitmap_format='bmp',
+          )
+          output.replace(icon_path)
+
+          data = icon_path.read_bytes()
           if len(data) < 6:
-              raise SystemExit('ICO is too short')
-
+              raise SystemExit('Generated ICO is too short')
           reserved, icon_type, count = struct.unpack_from('<HHH', data, 0)
-          if reserved != 0 or icon_type != 1 or count < 4:
-              raise SystemExit(f'Unexpected ICO header: reserved={reserved}, type={icon_type}, count={count}')
+          if reserved != 0 or icon_type != 1 or count < 5:
+              raise SystemExit(f'Unexpected generated ICO header: reserved={reserved}, type={icon_type}, count={count}')
 
           sizes = []
           for i in range(count):
@@ -47,14 +111,14 @@ jobs:
               height = 256 if height == 0 else height
               end = image_offset + byte_count
               if image_offset < 6 + count * 16 or end > len(data):
-                  raise SystemExit(f'ICO entry {i} is truncated or invalid: offset={image_offset}, bytes={byte_count}, file={len(data)}')
+                  raise SystemExit(f'Generated ICO entry {i} is invalid: offset={image_offset}, bytes={byte_count}, file={len(data)}')
               sizes.append((width, height, bit_count, byte_count))
 
-          print('Validated ICO entries:', sizes)
-          required = {(16, 16), (32, 32), (48, 48), (64, 64)}
+          required = {(16, 16), (24, 24), (32, 32), (48, 48), (64, 64)}
           actual = {(w, h) for w, h, _, _ in sizes}
           if not required.issubset(actual):
-              raise SystemExit(f'Missing required icon sizes: {sorted(required - actual)}')
+              raise SystemExit(f'Generated ICO is missing sizes: {sorted(required - actual)}')
+          print('Validated generated ICO entries:', sizes)
           PY
 
       - name: Update current Beta changelog detail
@@ -66,19 +130,19 @@ jobs:
           path = Path('CHANGELOG.md')
           text = path.read_text(encoding='utf-8')
           old = '- Fixed the Companion application icon so installed desktop and Start Menu shortcuts, the main window, Submitted Research Data window, notification-area icon, installer, and Windows uninstall entry use the Azeroth Questing icon instead of the generic Windows application icon. Existing desktop shortcuts are refreshed during an upgrade when they are already present, without creating a desktop shortcut for players who previously chose not to have one.\n'
-          new = '- Fixed the Companion application icon so installed desktop and Start Menu shortcuts, the main window, Submitted Research Data window, notification-area icon, installer, and Windows uninstall entry use the Azeroth Questing icon instead of the generic Windows application icon. Restored the known-good 16/32/48/64-pixel multi-resolution Windows icon after finding the later single-image icon resource was truncated, and existing desktop shortcuts are refreshed during an upgrade when they are already present without creating a shortcut for players who previously chose not to have one.\n'
+          new = '- Fixed the Companion application icon so installed desktop and Start Menu shortcuts, the main window, Submitted Research Data window, notification-area icon, installer, and Windows uninstall entry use the Azeroth Questing icon instead of the generic Windows application icon. Recovered the existing Azeroth Questing artwork from the damaged icon resource and rebuilt it as a validated multi-resolution Windows `.ico`; existing desktop shortcuts are refreshed during an upgrade when they are already present without creating a shortcut for players who previously chose not to have one.\n'
           if old not in text:
               raise SystemExit('Expected current icon changelog bullet was not found')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
           PY
           git diff --check
 
-      - name: Commit restored icon asset
+      - name: Commit recovered icon asset
         shell: bash
         run: |
           set -euo pipefail
           git config user.name Frostcanvas
           git config user.email 131615585+Frostcanvas@users.noreply.github.com
           git add src/AzerothQuesting.Companion/Assets/AzerothQuesting.ico CHANGELOG.md
-          git commit -m 'Restore valid Companion multi-resolution Windows icon'
+          git commit -m 'Recover valid Companion multi-resolution icon'
           git push origin HEAD:main
