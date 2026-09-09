@@ -101,7 +101,7 @@ The v0.1.4 source still needs testing on the player's Windows installation. Sign
 - Added Start Menu integration and a desktop-shortcut option.
 - Changed the companion publish format from a compressed single-file executable to a conventional self-contained application directory packaged by Inno Setup.
 - Changed companion self-updates to download and run the published installer from the companion's local update directory instead of copying the running executable into a randomized Windows Temp folder.
-- Kept SHA-256 verification for GitHub supplies a digest for the companion update package.
+- Kept SHA-256 verification when GitHub supplies a digest for the companion update package.
 - Improved player-facing terminology so the dashboard uses **Pending Observations** and **Scan for Observations** instead of snapshot wording.
 - Added explicit privacy wording that the companion does not capture the screen, record gameplay, or take screenshots.
 - Documented that the Windows binaries are not code-signed yet. Endpoint-security products can still warn about unsigned/reputation-new binaries until code signing is added.
