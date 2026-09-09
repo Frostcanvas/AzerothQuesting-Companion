@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -20,16 +19,16 @@ internal sealed class GitHubAddonClient : IDisposable
         {
             Timeout = TimeSpan.FromSeconds(45),
         };
-        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("AzerothQuestingCompanion", "0.1.7"));
+        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("AzerothQuestingCompanion", "0.1.8"));
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
     }
 
     public async Task<RemoteAddonPackage> GetLatestAddonAsync(CancellationToken cancellationToken = default)
     {
         var channel = UpdateChannelSettings.Parse(SettingsService.Load().UpdateChannel);
-        var release = channel == UpdateChannel.Beta
-            ? await GetAddonFromReleaseListAsync(cancellationToken)
-            : await GetStableAddonReleaseAsync(cancellationToken);
+        var release = await GetBestAddonReleaseAsync(
+            includePrereleases: channel == UpdateChannel.Beta,
+            cancellationToken);
 
         if (release is not null)
         {
@@ -46,89 +45,81 @@ internal sealed class GitHubAddonClient : IDisposable
     public async Task<RemoteCompanionPackage?> GetLatestCompanionAsync(CancellationToken cancellationToken = default)
     {
         var channel = UpdateChannelSettings.Parse(SettingsService.Load().UpdateChannel);
-        return channel == UpdateChannel.Beta
-            ? await GetCompanionFromReleaseListAsync(cancellationToken)
-            : await GetStableCompanionReleaseAsync(cancellationToken);
+        return await GetBestCompanionReleaseAsync(
+            includePrereleases: channel == UpdateChannel.Beta,
+            cancellationToken);
     }
 
-    private async Task<RemoteAddonPackage?> GetStableAddonReleaseAsync(CancellationToken cancellationToken)
+    private async Task<RemoteAddonPackage?> GetBestAddonReleaseAsync(
+        bool includePrereleases,
+        CancellationToken cancellationToken)
     {
-        var releaseUrl = $"https://api.github.com/repos/{Owner}/{AddonRepository}/releases/latest";
-        using var response = await _httpClient.GetAsync(releaseUrl, cancellationToken);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-        response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-        return TryReadAddonRelease(document.RootElement);
-    }
-
-    private async Task<RemoteAddonPackage?> GetAddonFromReleaseListAsync(CancellationToken cancellationToken)
-    {
-        var releasesUrl = $"https://api.github.com/repos/{Owner}/{AddonRepository}/releases?per_page=30";
+        var releasesUrl = $"https://api.github.com/repos/{Owner}/{AddonRepository}/releases?per_page=100";
         using var response = await _httpClient.GetAsync(releasesUrl, cancellationToken);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        RemoteAddonPackage? best = null;
         foreach (var release in document.RootElement.EnumerateArray())
         {
-            if (IsDraft(release))
+            if (IsDraft(release) || (!includePrereleases && IsPrerelease(release)))
             {
                 continue;
             }
 
             var package = TryReadAddonRelease(release);
-            if (package is not null)
+            if (package is null)
             {
-                return package;
+                continue;
+            }
+
+            if (best is null || ReleaseVersionUtility.IsNewer(best.Version, package.Version))
+            {
+                best = package;
             }
         }
-        return null;
+
+        return best;
     }
 
-    private async Task<RemoteCompanionPackage?> GetStableCompanionReleaseAsync(CancellationToken cancellationToken)
+    private async Task<RemoteCompanionPackage?> GetBestCompanionReleaseAsync(
+        bool includePrereleases,
+        CancellationToken cancellationToken)
     {
-        var releaseUrl = $"https://api.github.com/repos/{Owner}/{CompanionRepository}/releases/latest";
-        using var response = await _httpClient.GetAsync(releaseUrl, cancellationToken);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-        response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-        return TryReadCompanionRelease(document.RootElement);
-    }
-
-    private async Task<RemoteCompanionPackage?> GetCompanionFromReleaseListAsync(CancellationToken cancellationToken)
-    {
-        var releasesUrl = $"https://api.github.com/repos/{Owner}/{CompanionRepository}/releases?per_page=30";
+        var releasesUrl = $"https://api.github.com/repos/{Owner}/{CompanionRepository}/releases?per_page=100";
         using var response = await _httpClient.GetAsync(releasesUrl, cancellationToken);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        RemoteCompanionPackage? best = null;
         foreach (var release in document.RootElement.EnumerateArray())
         {
-            if (IsDraft(release))
+            if (IsDraft(release) || (!includePrereleases && IsPrerelease(release)))
             {
                 continue;
             }
 
             var package = TryReadCompanionRelease(release);
-            if (package is not null)
+            if (package is null)
             {
-                return package;
+                continue;
+            }
+
+            if (best is null || ReleaseVersionUtility.IsNewer(best.Version, package.Version))
+            {
+                best = package;
             }
         }
-        return null;
+
+        return best;
     }
 
     private static RemoteAddonPackage? TryReadAddonRelease(JsonElement root)
     {
         var tag = root.TryGetProperty("tag_name", out var tagValue) ? tagValue.GetString() : null;
-        var version = NormalizeVersion(tag);
+        var version = ReleaseVersionUtility.Normalize(tag);
         if (!root.TryGetProperty("assets", out var assets))
         {
             return null;
@@ -155,7 +146,7 @@ internal sealed class GitHubAddonClient : IDisposable
     private static RemoteCompanionPackage? TryReadCompanionRelease(JsonElement root)
     {
         var tag = root.TryGetProperty("tag_name", out var tagValue) ? tagValue.GetString() : null;
-        var version = NormalizeVersion(tag);
+        var version = ReleaseVersionUtility.Normalize(tag);
         if (!root.TryGetProperty("assets", out var assets))
         {
             return null;
@@ -183,6 +174,9 @@ internal sealed class GitHubAddonClient : IDisposable
     private static bool IsDraft(JsonElement release) =>
         release.TryGetProperty("draft", out var draftValue) && draftValue.ValueKind == JsonValueKind.True;
 
+    private static bool IsPrerelease(JsonElement release) =>
+        release.TryGetProperty("prerelease", out var prereleaseValue) && prereleaseValue.ValueKind == JsonValueKind.True;
+
     public async Task DownloadAsync(string url, string destination, CancellationToken cancellationToken = default)
     {
         using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -204,26 +198,6 @@ internal sealed class GitHubAddonClient : IDisposable
         }
 
         return null;
-    }
-
-    private static string? NormalizeVersion(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        value = value.Trim();
-        if (value.StartsWith("companion-v", StringComparison.OrdinalIgnoreCase))
-        {
-            value = value["companion-v".Length..];
-        }
-        else if (value.StartsWith('v') || value.StartsWith('V'))
-        {
-            value = value[1..];
-        }
-
-        return value;
     }
 
     public void Dispose() => _httpClient.Dispose();
