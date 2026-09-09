@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.8 Beta 4 - September 8, 2026
+
+- Changed Beta-channel Companion update status to stay on the installed beta train instead of presenting an older Stable release as the current Beta-channel version.
+- Once a Companion is running a prerelease, the next eligible automatic update is a newer GitHub Pre-release or a Stable release with the same/newer base version (the golden release). Older Stable releases are ignored for Beta-channel status.
+- Kept Stable mode restricted to normal GitHub Releases and Beta mode able to consume both GitHub Pre-releases and later Stable releases.
+- Clarified the distribution requirement: an Actions development artifact is not visible to the in-app updater. A beta installer must be published as a GitHub Pre-release with the expected `AzerothQuestingCompanion-Setup.exe` asset before Beta-channel clients can discover it.
+- Bumped the development Companion version to `0.1.8-beta.4`.
+
+This beta still needs Windows testing. The current public release feed has no Companion prerelease yet, so automatic beta-to-beta updating cannot be validated until a signed GitHub Pre-release is published under the existing code-signing policy. The addon itself was not changed for this fix.
+
 ## 0.1.8 Beta 3 - September 8, 2026
 
 - Added a lightweight authenticated Companion heartbeat every five minutes while Azeroth Questing Server synchronization is enabled, allowing the research dashboard to show **Companions Online** as installations seen within the last 10 minutes.
@@ -91,7 +101,7 @@ The v0.1.4 source still needs testing on the player's Windows installation. Sign
 - Added Start Menu integration and a desktop-shortcut option.
 - Changed the companion publish format from a compressed single-file executable to a conventional self-contained application directory packaged by Inno Setup.
 - Changed companion self-updates to download and run the published installer from the companion's local update directory instead of copying the running executable into a randomized Windows Temp folder.
-- Kept SHA-256 verification for GitHub Release assets when GitHub supplies a digest.
+- Kept SHA-256 verification for GitHub supplies a digest for the companion update package.
 - Improved player-facing terminology so the dashboard uses **Pending Observations** and **Scan for Observations** instead of snapshot wording.
 - Added explicit privacy wording that the companion does not capture the screen, record gameplay, or take screenshots.
 - Documented that the Windows binaries are not code-signed yet. Endpoint-security products can still warn about unsigned/reputation-new binaries until code signing is added.
@@ -112,7 +122,7 @@ The v0.1.2 source still needs testing on the player's Windows installation. This
 
 - Added **Check for Updates** support for both the companion and the Azeroth Questing addon.
 - Added companion self-updating from public GitHub Releases. When a newer companion release is available, the client downloads it, stages it with a temporary updater copy, exits, replaces the executable, and restarts automatically.
-- Added SHA-256 verification when GitHub supplies an asset digest for the companion update package.
+- Added SHA-256 verification when GitHub supplies a digest for the companion update package.
 - Added GitHub Actions packaging for `AzerothQuestingCompanion-win-x64.zip` and automatic versioned GitHub Release publishing for release commits.
 - Redesigned the Windows client around the dark Azeroth Questing dashboard style with sidebar navigation, top update actions, status cards, addon controls, WoW path controls, local data, and recent activity.
 - Changed addon update checks so the same update action reports both installed/latest addon status and companion status.
