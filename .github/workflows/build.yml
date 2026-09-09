@@ -104,6 +104,50 @@ jobs:
           "is_prerelease=$($isPrerelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           "signing_enabled=$($signingEnabled.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
+      - name: Prepare changelog release notes
+        if: steps.release_meta.outputs.is_release == 'true'
+        id: changelog_notes
+        shell: pwsh
+        run: |
+          $version = "${{ steps.release_meta.outputs.version }}"
+          $displayVersion = $version
+          if ($version -match '^(?<base>\d+\.\d+\.\d+)-beta\.(?<number>\d+)$') {
+            $displayVersion = "$($Matches.base) Beta $($Matches.number)"
+          }
+          elseif ($version -match '^(?<base>\d+\.\d+\.\d+)-rc\.(?<number>\d+)$') {
+            $displayVersion = "$($Matches.base) RC $($Matches.number)"
+          }
+
+          $lines = Get-Content "CHANGELOG.md"
+          $start = -1
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match "^##\s+$([regex]::Escape($displayVersion))\s+-") {
+              $start = $i
+              break
+            }
+          }
+
+          if ($start -lt 0) {
+            throw "Could not find CHANGELOG.md entry for $displayVersion."
+          }
+
+          $end = $lines.Count
+          for ($i = $start + 1; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match '^##\s+') {
+              $end = $i
+              break
+            }
+          }
+
+          $section = ($lines[$start..($end - 1)] -join "`r`n").Trim()
+          if ([string]::IsNullOrWhiteSpace($section)) {
+            throw "CHANGELOG.md entry for $displayVersion was empty."
+          }
+
+          $notesFile = "release-notes-$version.md"
+          Set-Content -Path $notesFile -Value $section -Encoding UTF8
+          "notes_file=$notesFile" >> $env:GITHUB_OUTPUT
+
       - name: Upload unsigned companion executable for SignPath
         if: steps.release_meta.outputs.signing_enabled == 'true'
         id: upload_unsigned_executable
@@ -258,15 +302,9 @@ jobs:
           $tag = "companion-v$version"
           $asset = "publish/installer/AzerothQuestingCompanion-Setup.exe"
           $isPrerelease = $version.Contains("-")
-
-          gh release view $tag 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            if ($isPrerelease) {
-              gh release create $tag --target $env:GITHUB_SHA --title "Azeroth Questing Companion v$version" --generate-notes --prerelease
-            }
-            else {
-              gh release create $tag --target $env:GITHUB_SHA --title "Azeroth Questing Companion v$version" --generate-notes
-            }
+          $notesFile = "${{ steps.changelog_notes.outputs.notes_file }}"
+          if ([string]::IsNullOrWhiteSpace($notesFile) -or -not (Test-Path $notesFile)) {
+            throw "Changelog-derived release notes were not prepared."
           }
 
           if ($env:SIGNING_ENABLED -eq "true") {
@@ -285,17 +323,27 @@ jobs:
             $policyHeader = @"
           **Unsigned Beta testing build**
 
-          This GitHub Pre-release is intentionally unsigned while Azeroth Questing Companion is waiting for SignPath code-signing approval/configuration. Windows SmartScreen or security software may warn before installation. Stable releases remain blocked unless they are signed.
+          This GitHub Pre-release is intentionally unsigned while Azeroth Questing Companion is waiting for code-signing setup. Windows SmartScreen or security software may warn before installation. Stable releases remain blocked unless they are signed.
 
           Code signing policy: https://github.com/Frostcanvas/AzerothQuesting-Companion/blob/main/CODE_SIGNING.md
           Privacy policy: https://github.com/Frostcanvas/AzerothQuesting-Companion/blob/main/PRIVACY.md
           "@
           }
 
-          $body = gh release view $tag --json body --jq '.body'
-          if ($body -notmatch 'Unsigned Beta testing build' -and $body -notmatch 'Code signing policy') {
-            $combined = "$policyHeader`r`n`r`n$body"
-            Set-Content -Path "release-notes.tmp.md" -Value $combined -Encoding UTF8
+          $changelog = Get-Content $notesFile -Raw
+          $combined = "$policyHeader`r`n`r`n$changelog"
+          Set-Content -Path "release-notes.tmp.md" -Value $combined -Encoding UTF8
+
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            if ($isPrerelease) {
+              gh release create $tag --target $env:GITHUB_SHA --title "Azeroth Questing Companion v$version" --notes-file "release-notes.tmp.md" --prerelease
+            }
+            else {
+              gh release create $tag --target $env:GITHUB_SHA --title "Azeroth Questing Companion v$version" --notes-file "release-notes.tmp.md"
+            }
+          }
+          else {
             gh release edit $tag --notes-file "release-notes.tmp.md"
           }
 
