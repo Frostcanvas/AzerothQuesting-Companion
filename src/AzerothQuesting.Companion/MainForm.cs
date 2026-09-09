@@ -24,6 +24,7 @@ internal sealed class MainForm : Form
     private readonly CompanionSettings _settings;
     private readonly Service01Client _serviceClient;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
+    private readonly System.Windows.Forms.Timer _updateCheckTimer = new() { Interval = 30 * 60 * 1000 };
 
     private readonly Label _clientVersionValue = CreateValueLabel("Starting...");
     private readonly Label _clientUpdateValue = CreateValueLabel("Not checked");
@@ -70,6 +71,7 @@ internal sealed class MainForm : Form
         BuildUi();
         BuildTrayIcon();
 
+        _updateCheckTimer.Tick += async (_, _) => await CheckForUpdatesAsync(showDialog: false);
         Shown += async (_, _) => await InitializeAsync();
         Resize += (_, _) =>
         {
@@ -83,6 +85,8 @@ internal sealed class MainForm : Form
         {
             _watcher?.Dispose();
             _notifyIcon?.Dispose();
+            _updateCheckTimer.Stop();
+            _updateCheckTimer.Dispose();
             _serviceClient.Dispose();
             _syncGate.Dispose();
             _github.Dispose();
@@ -524,7 +528,8 @@ internal sealed class MainForm : Form
                 await DetectWowAsync();
             }
 
-            await RefreshCompanionUpdateStatusAsync();
+            await CheckForUpdatesAsync(showDialog: false);
+            _updateCheckTimer.Start();
         }
         catch (Exception ex)
         {
@@ -684,7 +689,7 @@ internal sealed class MainForm : Form
         }
     }
 
-    private async Task CheckForUpdatesAsync()
+    private async Task CheckForUpdatesAsync(bool showDialog = true)
     {
         if (!TryBeginBusy("Checking companion and addon updates..."))
         {
@@ -769,12 +774,15 @@ internal sealed class MainForm : Form
 
             SetStatus("Update check complete.");
             AddActivity("Update check complete.");
-            MessageBox.Show(
-                this,
-                $"{clientSummary}\n\n{addonSummary}\n\nUse Update Addon if an addon update is available.",
-                "Azeroth Questing Updates",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            if (showDialog)
+            {
+                MessageBox.Show(
+                    this,
+                    $"{clientSummary}\n\n{addonSummary}\n\nUse Update Addon if an addon update is available.",
+                    "Azeroth Questing Updates",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
         }
         catch (Exception ex)
         {
@@ -944,6 +952,8 @@ internal sealed class MainForm : Form
         {
             EndBusy();
         }
+
+        await CheckForUpdatesAsync(showDialog: false);
     }
 
     private async Task<ServiceSyncResult?> TrySyncPendingAsync(bool quiet)
@@ -969,6 +979,10 @@ internal sealed class MainForm : Form
                         + $"{result.DuplicateObservations} duplicate(s), {result.UploadedSnapshots} pending file(s) cleared.");
                 }
             });
+            if (result.UploadedSnapshots > 0)
+            {
+                SafeUi(() => _ = CheckForUpdatesAsync(showDialog: false));
+            }
             return result;
         }
         catch (Exception ex)

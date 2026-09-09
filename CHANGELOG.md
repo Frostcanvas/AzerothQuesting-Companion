@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.9 Beta 4 - September 9, 2026
+
+- Added an automatic GitHub update check when the Companion finishes starting. The same Stable/Beta channel rules used by the manual **Check for Updates** button are used for this startup check.
+- Added a background update check every 30 minutes while the Companion remains open. Background checks update the dashboard/activity status without showing the normal no-update information dialog.
+- Added an update check after a manual **Sync Now** completes and after automatic Azeroth Questing Server synchronization successfully clears one or more Pending Observation files. This lets active research sessions notice newly published addon or Companion betas without waiting for the 30-minute timer.
+- Kept Companion self-update behavior unchanged when a newer eligible Companion release is found: the installer is staged and launched using the existing updater flow. Addon updates remain player-controlled through **Update Addon** / **Install / Update Addon**.
+- Advanced the Companion test build to `0.1.9-beta.4` with Windows file version `0.1.8.9` because Beta 3 had already been handed off before these automatic update-check changes.
+- The previous Beta 3 release attempt built the application successfully but stopped at the SignPath configuration validation step before signing, installer creation, or GitHub Pre-release publication. No signed Beta 3 installer was published.
+
+Beta 4 still requires Windows testing. Verify the Companion checks for updates at startup without a no-update popup, repeats the check after roughly 30 minutes, checks again after a successful data sync, still allows the manual **Check for Updates** action, does not auto-install addon updates, and continues to stage/restart for an eligible Companion self-update. Public Companion publication still requires valid SignPath repository configuration and a signed installer; no signing success is claimed.
+
 ## 0.1.9 Beta 3 - September 9, 2026
 
 - Fixed the final server-endpoint fallback in `Service01Client.NormalizeBaseUrl`. If the configured endpoint is blank at runtime, the Companion now falls back to `https://aq.frostlabs.dev` through `SettingsService.DefaultServiceBaseUrl` instead of the retired private LAN address.
