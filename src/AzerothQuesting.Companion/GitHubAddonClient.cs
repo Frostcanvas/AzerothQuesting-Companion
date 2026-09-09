@@ -26,21 +26,43 @@ internal sealed class GitHubAddonClient : IDisposable
 
     public async Task<RemoteAddonPackage> GetLatestAddonAsync(CancellationToken cancellationToken = default)
     {
-        var channel = UpdateChannelSettings.Parse(SettingsService.Load().UpdateChannel);
+        var settings = SettingsService.Load();
+        var channel = UpdateChannelSettings.Parse(settings.UpdateChannel);
         var release = await GetBestAddonReleaseAsync(
             includePrereleases: channel == UpdateChannel.Beta,
             cancellationToken);
 
+        RemoteAddonPackage candidate;
         if (release is not null)
         {
-            return release;
+            candidate = release;
+        }
+        else
+        {
+            var tocUrl = $"https://raw.githubusercontent.com/{Owner}/{AddonRepository}/main/AzerothQuesting.toc";
+            var toc = await _httpClient.GetStringAsync(tocUrl, cancellationToken);
+            var fallbackVersion = ParseTocVersion(toc) ?? "unknown";
+            var sourceZip = $"https://github.com/{Owner}/{AddonRepository}/archive/refs/heads/main.zip";
+            candidate = new RemoteAddonPackage(fallbackVersion, sourceZip, false);
         }
 
-        var tocUrl = $"https://raw.githubusercontent.com/{Owner}/{AddonRepository}/main/AzerothQuesting.toc";
-        var toc = await _httpClient.GetStringAsync(tocUrl, cancellationToken);
-        var fallbackVersion = ParseTocVersion(toc) ?? "unknown";
-        var sourceZip = $"https://github.com/{Owner}/{AddonRepository}/archive/refs/heads/main.zip";
-        return new RemoteAddonPackage(fallbackVersion, sourceZip, false);
+        if (channel == UpdateChannel.Beta &&
+            !string.IsNullOrWhiteSpace(settings.WowRetailPath))
+        {
+            var installedVersion = AddonService.GetInstalledVersion(settings.WowRetailPath);
+            if (!string.IsNullOrWhiteSpace(installedVersion) &&
+                IsPrereleaseVersion(installedVersion) &&
+                ReleaseVersionUtility.Compare(candidate.Version, installedVersion) < 0)
+            {
+                // Apple-style beta train behavior for the addon. Once a prerelease
+                // is installed, an older Stable release is no longer the current
+                // Beta-channel package. Wait for a newer prerelease or the same/newer
+                // base version's Stable (golden) release instead of offering a downgrade.
+                return new RemoteAddonPackage(installedVersion, string.Empty, false);
+            }
+        }
+
+        return candidate;
     }
 
     public async Task<RemoteCompanionPackage?> GetLatestCompanionAsync(CancellationToken cancellationToken = default)
