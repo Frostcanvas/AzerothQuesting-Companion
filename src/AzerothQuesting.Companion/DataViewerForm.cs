@@ -30,6 +30,7 @@ internal sealed class DataViewerForm : Form
     private readonly DataGridView _classGrid = CreateGrid();
     private readonly DataGridView _versionsGrid = CreateGrid();
     private readonly Button _refreshButton = CreateActionButton("Refresh", Gold);
+    private readonly Button _exportButton = CreateActionButton("Export Collected Quests", Gold);
     private bool _loading;
 
     public DataViewerForm(Service01Client serviceClient, string companionVersion)
@@ -87,10 +88,11 @@ internal sealed class DataViewerForm : Form
         {
             Dock = DockStyle.Fill,
             BackColor = Background,
-            ColumnCount = 2,
+            ColumnCount = 3,
             RowCount = 1,
         };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         var title = new FlowLayoutPanel
@@ -116,11 +118,15 @@ internal sealed class DataViewerForm : Form
             Font = new Font("Segoe UI", 9.5f, FontStyle.Regular),
         });
 
+        _exportButton.Click += async (_, _) => await ExportCollectedQuestsAsync();
+        _exportButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        _exportButton.Margin = new Padding(0, 0, 8, 0);
         _refreshButton.Click += async (_, _) => await RefreshAsync();
         _refreshButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 
         panel.Controls.Add(title, 0, 0);
-        panel.Controls.Add(_refreshButton, 1, 0);
+        panel.Controls.Add(_exportButton, 1, 0);
+        panel.Controls.Add(_refreshButton, 2, 0);
         return panel;
     }
 
@@ -141,7 +147,7 @@ internal sealed class DataViewerForm : Form
 
         grid.Controls.Add(CreateMetricCard("Total Observations", _totalObservations, "All submitted structured observations"), 0, 0);
         grid.Controls.Add(CreateMetricCard("Unique Quests", _uniqueQuests, "Distinct quest IDs observed"), 1, 0);
-        grid.Controls.Add(CreateMetricCard("Active Installations", _activeInstallations, "Seen by the server in the last 30 days"), 2, 0);
+        grid.Controls.Add(CreateMetricCard("Companions Online", _activeInstallations, "Heartbeat seen in the last 10 minutes"), 2, 0);
         grid.Controls.Add(CreateMetricCard("Your Observations", _yourObservations, "Submitted by this Companion installation"), 3, 0);
         return grid;
     }
@@ -241,11 +247,53 @@ internal sealed class DataViewerForm : Form
         }
     }
 
+    private async Task ExportCollectedQuestsAsync()
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Export Azeroth Questing Collected Quests",
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            DefaultExt = "csv",
+            AddExtension = true,
+            FileName = $"AzerothQuesting-Collected-Quests-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        _exportButton.Enabled = false;
+        _status.ForeColor = TextSecondary;
+        _status.Text = "Exporting every quest currently collected by Azeroth Questing research...";
+        try
+        {
+            var csv = await _serviceClient.ExportCollectedQuestsCsvAsync(_companionVersion);
+            await File.WriteAllTextAsync(dialog.FileName, csv);
+            _status.ForeColor = Green;
+            _status.Text = $"Collected quest export saved to {dialog.FileName}";
+        }
+        catch (Exception ex)
+        {
+            _status.ForeColor = Gold;
+            _status.Text = $"Could not export collected quests: {ex.Message}";
+        }
+        finally
+        {
+            _exportButton.Enabled = true;
+        }
+    }
+
     private void ApplyData(ResearchDashboardData data)
     {
         _totalObservations.Text = data.Summary.TotalObservations.ToString("N0");
         _uniqueQuests.Text = data.Summary.UniqueQuests.ToString("N0");
-        _activeInstallations.Text = data.Summary.ActiveInstallations30Days.ToString("N0");
+        _activeInstallations.Text = data.Summary.ConnectedInstallations.ToString("N0");
         _yourObservations.Text = data.YourInstallation.Observations.ToString("N0");
 
         _recentGrid.Rows.Clear();

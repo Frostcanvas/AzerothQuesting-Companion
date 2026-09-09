@@ -2,7 +2,7 @@
 
 Windows companion application for the **Azeroth Questing** World of Warcraft addon.
 
-## Development version - v0.1.8-beta.2
+## Development version - v0.1.8-beta.3
 
 The latest public release remains v0.1.3 until trusted Windows code signing is approved and configured through SignPath Foundation.
 
@@ -21,6 +21,8 @@ The companion currently:
 - Runs in the Windows notification area so it can keep watching in the background.
 - Uses a dark dashboard-style interface with addon, update, WoW path, local data, and recent activity status.
 - Shows submitted research data in a privacy-preserving viewer with aggregate counts, recent anonymous observations, class evidence, and active addon/Companion version counts.
+- Sends a lightweight authenticated heartbeat every five minutes while server synchronization is enabled so the viewer can report Companions Online using a 10-minute activity window.
+- Exports every distinct quest ID collected by Azeroth Questing research to CSV from the Submitted Research Data viewer.
 - Installs as a normal Windows desktop application with Start Menu integration, Windows Installed Apps/uninstall registration, and a desktop shortcut selected by default on first install.
 
 The companion does not detect, migrate, delete, watch, or otherwise manage the retired ZoneQuestGuide addon or its SavedVariables.

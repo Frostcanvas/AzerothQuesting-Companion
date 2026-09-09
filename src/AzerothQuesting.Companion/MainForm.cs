@@ -1204,7 +1204,7 @@ internal sealed class MainForm : Form
         }
 
         var version = assembly.GetName().Version;
-        return version is null ? "0.1.8-beta.2" : $"{version.Major}.{version.Minor}.{version.Build}";
+        return version is null ? "0.1.8-beta.3" : $"{version.Major}.{version.Minor}.{version.Build}";
     }
 
     private static Panel CreateSurfacePanel() => new()

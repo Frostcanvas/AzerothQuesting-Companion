@@ -37,6 +37,9 @@ internal sealed class ResearchSummary
     [JsonPropertyName("installations")]
     public int Installations { get; set; }
 
+    [JsonPropertyName("connected_installations")]
+    public int ConnectedInstallations { get; set; }
+
     [JsonPropertyName("active_installations_30d")]
     public int ActiveInstallations30Days { get; set; }
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.8 Beta 3 - September 8, 2026
+
+- Added a lightweight authenticated Companion heartbeat every five minutes while Azeroth Questing Server synchronization is enabled, allowing the research dashboard to show **Companions Online** as installations seen within the last 10 minutes.
+- Heartbeats report only the existing anonymous installation identity plus Companion version, installed addon version, Stable/Beta update channel, and last-seen time; they do not add character, account, Windows-user, or gameplay identity data.
+- Added **Export Collected Quests** to the Submitted Research Data viewer. The export saves every distinct quest ID currently collected by Azeroth Questing research as CSV with observed maps, factions, evidence types, classes, observation counts, installation counts, completion evidence, and first/last receive times.
+- Clarified that the collected-quest CSV is not a complete catalog of every quest shipped in World of Warcraft; it contains the complete set observed by the Azeroth Questing research system.
+- Bumped the development Companion version to `0.1.8-beta.3` and requires Azeroth Questing Server API `0.2.2` for heartbeat/online counts and collected-quest export.
+
+This beta still needs testing on the player's Windows installation and against the live Azeroth Questing Server API `0.2.2`. A successful GitHub Actions build confirms compilation/packaging only and does not count as live Windows, server, or in-game testing. The WoW addon itself was not changed for this feature.
+
 ## 0.1.8 Beta 2 - September 8, 2026
 
 - Added a **Submitted Research Data** viewer in the Companion with total observations, unique quests, active installation counts, this installation's contribution count, recent anonymous observations, class-evidence summaries, and active addon/Companion version counts.

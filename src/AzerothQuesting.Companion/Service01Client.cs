@@ -21,6 +21,9 @@ internal sealed partial class Service01Client : IDisposable
     private readonly HttpClient _httpClient;
     private readonly CompanionSettings _settings;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly SemaphoreSlim _heartbeatGate = new(1, 1);
+    private System.Threading.Timer? _heartbeatTimer;
+    private string? _heartbeatCompanionVersion;
     private bool _disposed;
 
     public Service01Client(CompanionSettings settings)
@@ -40,6 +43,8 @@ internal sealed partial class Service01Client : IDisposable
     {
         ThrowIfDisposed();
         AppPaths.EnsureCreated();
+        ConfigureHeartbeat(companionVersion);
+        await SendHeartbeatAsync(cancellationToken);
 
         var files = Directory
             .EnumerateFiles(AppPaths.Outbox, "*.lua", SearchOption.TopDirectoryOnly)
@@ -124,6 +129,8 @@ internal sealed partial class Service01Client : IDisposable
         CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
+        ConfigureHeartbeat(companionVersion);
+        await SendHeartbeatAsync(cancellationToken);
         await EnsureRegisteredAsync(companionVersion, cancellationToken);
 
         using var response = await SendAuthorizedGetAsync("/api/v1/research/dashboard", cancellationToken);
@@ -136,6 +143,130 @@ internal sealed partial class Service01Client : IDisposable
         }
 
         return await ReadResearchDashboardAsync(response, cancellationToken);
+    }
+
+    public async Task<string> ExportCollectedQuestsCsvAsync(
+        string companionVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        ConfigureHeartbeat(companionVersion);
+        await SendHeartbeatAsync(cancellationToken);
+        await EnsureRegisteredAsync(companionVersion, cancellationToken);
+
+        using var response = await SendAuthorizedGetAsync("/api/v1/research/export/quests.csv", cancellationToken);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            ClearRegistration();
+            await EnsureRegisteredAsync(companionVersion, cancellationToken);
+            using var retry = await SendAuthorizedGetAsync("/api/v1/research/export/quests.csv", cancellationToken);
+            return await ReadTextExportAsync(retry, cancellationToken);
+        }
+
+        return await ReadTextExportAsync(response, cancellationToken);
+    }
+
+    private void ConfigureHeartbeat(string companionVersion)
+    {
+        _heartbeatCompanionVersion = companionVersion;
+        _heartbeatTimer ??= new System.Threading.Timer(
+            _ => _ = RunHeartbeatAsync(),
+            null,
+            TimeSpan.FromMinutes(5),
+            TimeSpan.FromMinutes(5));
+    }
+
+    private async Task RunHeartbeatAsync()
+    {
+        if (_disposed || !_settings.ServiceSyncEnabled || string.IsNullOrWhiteSpace(_heartbeatCompanionVersion))
+        {
+            return;
+        }
+
+        try
+        {
+            await SendHeartbeatAsync(CancellationToken.None);
+        }
+        catch
+        {
+            // Heartbeats are best-effort. Normal sync and dashboard requests
+            // still surface server errors to the player.
+        }
+    }
+
+    private async Task SendHeartbeatAsync(CancellationToken cancellationToken)
+    {
+        if (!await _heartbeatGate.WaitAsync(0, cancellationToken))
+        {
+            return;
+        }
+
+        try
+        {
+            var companionVersion = _heartbeatCompanionVersion;
+            if (string.IsNullOrWhiteSpace(companionVersion))
+            {
+                return;
+            }
+
+            await EnsureRegisteredAsync(companionVersion, cancellationToken);
+            var request = new HeartbeatRequest
+            {
+                CompanionVersion = companionVersion,
+                AddonVersion = GetInstalledAddonVersion(),
+                UpdateChannel = UpdateChannelSettings.Serialize(UpdateChannelSettings.Parse(_settings.UpdateChannel)),
+            };
+
+            using var response = await PostJsonAsync(
+                "/api/v1/installations/heartbeat",
+                request,
+                _settings.InstallationToken,
+                cancellationToken);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                ClearRegistration();
+                await EnsureRegisteredAsync(companionVersion, cancellationToken);
+                using var retry = await PostJsonAsync(
+                    "/api/v1/installations/heartbeat",
+                    request,
+                    _settings.InstallationToken,
+                    cancellationToken);
+                await EnsureSuccessAsync(retry, "heartbeat", cancellationToken);
+                return;
+            }
+
+            await EnsureSuccessAsync(response, "heartbeat", cancellationToken);
+        }
+        finally
+        {
+            _heartbeatGate.Release();
+        }
+    }
+
+    private string? GetInstalledAddonVersion()
+    {
+        var retailPath = _settings.WowRetailPath;
+        if (!WowLocator.IsRetailPath(retailPath))
+        {
+            return null;
+        }
+
+        return AddonService.GetInstalledVersion(retailPath!);
+    }
+
+    private async Task<string> ReadTextExportAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"Azeroth Questing server collected quest export failed ({(int)response.StatusCode} {response.ReasonPhrase}): {TrimForError(body)}");
+        }
+
+        return body;
     }
 
     private async Task<HttpResponseMessage> SendAuthorizedGetAsync(
@@ -464,6 +595,8 @@ internal sealed partial class Service01Client : IDisposable
             return;
         }
         _disposed = true;
+        _heartbeatTimer?.Dispose();
+        _heartbeatGate.Dispose();
         _httpClient.Dispose();
     }
 
@@ -475,6 +608,18 @@ internal sealed partial class Service01Client : IDisposable
 
     [GeneratedRegex(@"^[A-Za-z0-9._:-]+$", RegexOptions.CultureInvariant)]
     private static partial Regex ObservationKeyRegex();
+
+    private sealed class HeartbeatRequest
+    {
+        [JsonPropertyName("companion_version")]
+        public string? CompanionVersion { get; set; }
+
+        [JsonPropertyName("addon_version")]
+        public string? AddonVersion { get; set; }
+
+        [JsonPropertyName("update_channel")]
+        public string? UpdateChannel { get; set; }
+    }
 
     private sealed class RegistrationRequest
     {

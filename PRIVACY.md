@@ -44,9 +44,11 @@ Older Pending Observation files created before the structured v0.2.32 handoff ca
 
 The companion also accesses GitHub to check for and download official Azeroth Questing Companion and Azeroth Questing addon updates.
 
+While Azeroth Questing Server synchronization is enabled, the Companion sends a lightweight authenticated heartbeat every five minutes. The heartbeat updates the anonymous installation's last-seen time and may include Companion version, installed addon version, and Stable/Beta update channel so the research dashboard can report active-version counts and **Companions Online**. It does not include character name, account/BattleTag, Windows username, screenshots, chat, gameplay activity, or IP history. A Companion counts as online when the server has received a heartbeat within the last 10 minutes; this is an activity window rather than a permanent network connection.
+
 ## Submitted Research Data viewer
 
-The Companion can use its per-installation bearer token to read a privacy-preserving research summary from the Azeroth Questing Server. The viewer may show aggregate observation and quest counts, this installation's own contribution count, recent anonymous structured observations, class-evidence summaries, and active addon/Companion version counts.
+The Companion can use its per-installation bearer token to read a privacy-preserving research summary from the Azeroth Questing Server. The viewer may show aggregate observation and quest counts, this installation's own contribution count, recent anonymous structured observations, class-evidence summaries, and active addon/Companion version counts. The viewer can also export every distinct quest ID currently collected by the research system as CSV.
 
 The viewer does **not** receive installation IDs, client observation keys, bearer-token hashes, raw SavedVariables payloads, character names, account identifiers, BattleTags, realm identifiers, screenshots, gameplay recordings, or IP history.
 
