@@ -1,8 +1,8 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.1.9-beta.1"
+  #define MyAppVersion "0.1.9-beta.5"
 #endif
 #ifndef MyAppFileVersion
-  #define MyAppFileVersion "0.1.8.6"
+  #define MyAppFileVersion "0.1.8.10"
 #endif
 
 #define MyAppName "Azeroth Questing Companion"

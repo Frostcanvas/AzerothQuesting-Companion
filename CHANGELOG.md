@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.9 Beta 5 - September 9, 2026 - Development
+
+- **Changed** the Companion application artwork to a clean **AQ** monogram that matches the dark purple-and-yellow Azeroth Questing website branding.
+- **Fixed** the partial/cropped Windows shortcut icon seen while testing Beta 4 by rebuilding `AzerothQuesting.ico` as a true multi-resolution Windows icon with 16, 32, 48, 64, 128, and 256 pixel images plus transparent breathing room around the badge so Windows can scale it without cutting off the artwork.
+- **Kept** the same icon asset wired to the Companion executable, main and Submitted Research Data windows, notification-area icon, installer, Start Menu shortcut, desktop shortcut, and Windows uninstall entry.
+- **Changed** the Companion test build to `0.1.9-beta.5` with Windows file version `0.1.8.10` because Beta 4 had already been published/consumed before the icon-rendering problem was found.
+
+Beta 5 requires Windows testing. Install/update to the published Beta 5 build only after its GitHub Pre-release and `AzerothQuestingCompanion-Setup.exe` asset exist, then verify that the complete AQ badge appears on the desktop shortcut, Start Menu shortcut, main/title-bar window, Submitted Research Data window, notification area, installer, and Windows Installed Apps/uninstall entry. No Windows runtime/icon success is claimed yet. If trusted signing is still unavailable, this Beta may be published as an explicitly unsigned testing build and Windows may show SmartScreen or publisher warnings; Stable still requires trusted signing.
+
 ## 0.1.9 Beta 4 - September 9, 2026 - Available on GitHub Pre-release
 
 - Added an automatic GitHub update check when the Companion finishes starting. The same Stable/Beta channel rules used by the manual **Check for Updates** button are used for this startup check.
