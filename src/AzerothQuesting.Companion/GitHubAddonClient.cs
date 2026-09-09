@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text.Json;
 
 namespace AzerothQuesting.Companion;
@@ -45,9 +46,26 @@ internal sealed class GitHubAddonClient : IDisposable
     public async Task<RemoteCompanionPackage?> GetLatestCompanionAsync(CancellationToken cancellationToken = default)
     {
         var channel = UpdateChannelSettings.Parse(SettingsService.Load().UpdateChannel);
-        return await GetBestCompanionReleaseAsync(
+        var best = await GetBestCompanionReleaseAsync(
             includePrereleases: channel == UpdateChannel.Beta,
             cancellationToken);
+
+        if (channel != UpdateChannel.Beta || best is null)
+        {
+            return best;
+        }
+
+        // Apple-style beta train behavior: once this installation is already on a
+        // prerelease, an older Stable release must not be presented as the current
+        // Beta-channel version. The next eligible update is a newer prerelease or
+        // the same/newer base version's Stable (golden) release.
+        var runningVersion = GetRunningCompanionVersion();
+        if (IsPrereleaseVersion(runningVersion) && ReleaseVersionUtility.Compare(best.Version, runningVersion) < 0)
+        {
+            return new RemoteCompanionPackage(runningVersion, string.Empty, null);
+        }
+
+        return best;
     }
 
     private async Task<RemoteAddonPackage?> GetBestAddonReleaseAsync(
@@ -169,6 +187,28 @@ internal sealed class GitHubAddonClient : IDisposable
         }
 
         return null;
+    }
+
+    private static string GetRunningCompanionVersion()
+    {
+        var assembly = typeof(GitHubAddonClient).Assembly;
+        var informational = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+
+        if (!string.IsNullOrWhiteSpace(informational))
+        {
+            var buildMetadata = informational.IndexOf('+');
+            return buildMetadata >= 0 ? informational[..buildMetadata] : informational;
+        }
+
+        return assembly.GetName().Version?.ToString(3) ?? "unknown";
+    }
+
+    private static bool IsPrereleaseVersion(string version)
+    {
+        var normalized = ReleaseVersionUtility.Normalize(version);
+        return !string.IsNullOrWhiteSpace(normalized) && normalized.Contains('-');
     }
 
     private static bool IsDraft(JsonElement release) =>
