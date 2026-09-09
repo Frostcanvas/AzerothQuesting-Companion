@@ -203,7 +203,7 @@ internal sealed partial class Service01Client : IDisposable
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
             // The local token was lost but this client-instance ID already
-            // exists on Service01. Create a new anonymous installation identity
+            // exists on the server. Create a new anonymous installation identity
             // rather than needing a shared recovery secret.
             clientInstanceId = Guid.NewGuid();
             _settings.ClientInstanceId = clientInstanceId.ToString("D");
@@ -366,7 +366,7 @@ internal sealed partial class Service01Client : IDisposable
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         throw new HttpRequestException(
-            $"Service01 {operation} failed ({(int)response.StatusCode} {response.ReasonPhrase}): {TrimForError(body)}");
+            $"Azeroth Questing server {operation} failed ({(int)response.StatusCode} {response.ReasonPhrase}): {TrimForError(body)}");
     }
 
     private void ClearRegistration()
