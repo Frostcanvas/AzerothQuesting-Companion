@@ -17,70 +17,72 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Patch MainForm prerelease comparison
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path("src/AzerothQuesting.Companion/MainForm.cs")
           text = path.read_text(encoding="utf-8")
 
           old = '''    private static bool VersionsMatch(string left, string right)
-    {
-        static string Normalize(string value) => value.Trim().TrimStart('v', 'V');
-        var a = Normalize(left);
-        var b = Normalize(right);
-        return Version.TryParse(a, out var va) && Version.TryParse(b, out var vb)
-            ? va == vb
-            : string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
-    }
+          {
+              static string Normalize(string value) => value.Trim().TrimStart('v', 'V');
+              var a = Normalize(left);
+              var b = Normalize(right);
+              return Version.TryParse(a, out var va) && Version.TryParse(b, out var vb)
+                  ? va == vb
+                  : string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+          }
 
-    private static bool IsNewerVersion(string current, string remote)
-    {
-        static string Normalize(string value) => value.Trim().TrimStart('v', 'V');
-        return Version.TryParse(Normalize(current), out var currentVersion)
-            && Version.TryParse(Normalize(remote), out var remoteVersion)
-            && remoteVersion > currentVersion;
-    }
+          private static bool IsNewerVersion(string current, string remote)
+          {
+              static string Normalize(string value) => value.Trim().TrimStart('v', 'V');
+              return Version.TryParse(Normalize(current), out var currentVersion)
+                  && Version.TryParse(Normalize(remote), out var remoteVersion)
+                  && remoteVersion > currentVersion;
+          }
 
-    private static string GetClientVersion()
-    {
-        var version = Assembly.GetExecutingAssembly().GetName().Version;
-        return version is null ? "0.1.5" : $"{version.Major}.{version.Minor}.{version.Build}";
-    }
-'''
+          private static string GetClientVersion()
+          {
+              var version = Assembly.GetExecutingAssembly().GetName().Version;
+              return version is null ? "0.1.5" : $"{version.Major}.{version.Minor}.{version.Build}";
+          }
+          '''
 
           new = '''    private static bool VersionsMatch(string left, string right)
-    {
-        return ReleaseVersionUtility.Matches(left, right);
-    }
+          {
+              return ReleaseVersionUtility.Matches(left, right);
+          }
 
-    private static bool IsNewerVersion(string current, string remote)
-    {
-        return ReleaseVersionUtility.IsNewer(current, remote);
-    }
+          private static bool IsNewerVersion(string current, string remote)
+          {
+              return ReleaseVersionUtility.IsNewer(current, remote);
+          }
 
-    private static string GetClientVersion()
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        if (!string.IsNullOrWhiteSpace(informational))
-        {
-            var displayVersion = informational.Split('+', 2)[0].Trim();
-            if (ReleaseVersionUtility.TryParse(displayVersion, out _))
-            {
-                return displayVersion;
-            }
-        }
+          private static string GetClientVersion()
+          {
+              var assembly = Assembly.GetExecutingAssembly();
+              var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+              if (!string.IsNullOrWhiteSpace(informational))
+              {
+                  var displayVersion = informational.Split('+', 2)[0].Trim();
+                  if (ReleaseVersionUtility.TryParse(displayVersion, out _))
+                  {
+                      return displayVersion;
+                  }
+              }
 
-        var version = assembly.GetName().Version;
-        return version is null ? "0.1.8-beta.1" : $"{version.Major}.{version.Minor}.{version.Build}";
-    }
-'''
+              var version = assembly.GetName().Version;
+              return version is null ? "0.1.8-beta.1" : $"{version.Major}.{version.Minor}.{version.Build}";
+          }
+          '''
 
           if old not in text:
               raise SystemExit("Expected MainForm version-comparison block was not found; refusing to patch.")
 
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
 
       - name: Commit patch
         shell: bash
