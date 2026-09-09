@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.9 Beta 3 - September 9, 2026
+
+- Fixed the final server-endpoint fallback in `Service01Client.NormalizeBaseUrl`. If the configured endpoint is blank at runtime, the Companion now falls back to `https://aq.frostlabs.dev` through `SettingsService.DefaultServiceBaseUrl` instead of the retired private LAN address.
+- Kept the existing one-time migration from the exact legacy LAN endpoint to the public HTTPS endpoint and preserved manually configured custom endpoints.
+- Updated the Companion GitHub API user-agent version from `0.1.8` to the current `0.1.9` train.
+- Advanced the next testable Companion build to `0.1.9-beta.3` because Beta 2 had already been handed off for testing before this endpoint fallback correction.
+- Recorded the actual public-ingress test status: `https://aq.frostlabs.dev/api/v1/status` was successfully reached from a phone on cellular data and returned Azeroth Questing Server API `0.2.4`; the public `/research` page did not expose the internal dashboard. This confirms the public server route, not a full Companion synchronization test.
+
+Beta 3 still requires Windows testing. Verify the repaired Azeroth Questing icon on installed Windows surfaces, select the Beta channel, confirm the Companion uses `https://aq.frostlabs.dev`, then test registration, heartbeat, Submitted Research Data, Pending Observations synchronization, Companion self-update, and addon update from an outside network. Do not treat the cellular API test as proof that the Windows Companion path has passed. The WoW addon version is managed independently.
+
+
 ## 0.1.9 Beta 2 - September 8, 2026
 
 - Changed the default Azeroth Questing Server endpoint from the private FrostLabs LAN address to the dedicated public HTTPS endpoint `https://aq.frostlabs.dev`, enabling controlled outside-network beta testing once the public ingress is deployed.

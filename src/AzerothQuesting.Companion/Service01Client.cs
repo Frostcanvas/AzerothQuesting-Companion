@@ -510,7 +510,7 @@ internal sealed partial class Service01Client : IDisposable
     private static string NormalizeBaseUrl(string? value)
     {
         value = string.IsNullOrWhiteSpace(value)
-            ? "http://10.0.10.246:8766"
+            ? SettingsService.DefaultServiceBaseUrl
             : value.Trim();
         return value.TrimEnd('/');
     }
