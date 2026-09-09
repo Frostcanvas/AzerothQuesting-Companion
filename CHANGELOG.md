@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.6 Beta - September 8, 2026
+
+- Added a **Stable / Beta** update-channel selector directly to the Companion top bar.
+- Changed the update channel to control both Azeroth Questing Companion updates and Azeroth Questing addon updates together.
+- Added beta-channel GitHub release discovery. Stable mode continues to use normal public releases only; Beta mode also considers GitHub prereleases and falls back to the newest stable release when no prerelease is available.
+- Kept the same addon folder and SavedVariables path when switching channels so beta testing does not create a second AzerothQuesting installation.
+- Restored the working Azeroth Questing executable icon resource and adjusted installer packaging so the application/desktop shortcut can keep the custom icon without Inno Setup rejecting the installer icon resource.
+- Bumped the development Companion version to 0.1.6.
+
+The v0.1.6 beta-channel build compiled and packaged successfully in GitHub Actions. It has not yet been tested on the player's Windows installation. Test switching between Stable and Beta, run **Check for Updates**, verify Stable ignores prereleases, verify Beta can select prereleases when they exist, and verify addon install/update still refuses to replace files while WoW is running. The development installer is still unsigned while SignPath Foundation approval is pending, so Windows SmartScreen or endpoint security may warn about it. No public v0.1.6 GitHub Release has been published.
+
 ## 0.1.5 - September 8, 2026
 
 - Added Service01 synchronization for Pending Observations using the private Azeroth Questing API on the FrostLabs LAN.
