@@ -78,14 +78,16 @@ internal static class UiTerminology
         }
     }
 
-    private static string ReplaceTerms(string value)
+    private static string ReplaceTerms(string? value)
     {
         if (string.IsNullOrEmpty(value))
         {
-            return value;
+            return value ?? string.Empty;
         }
 
-        return value
+        var replacement = value
+            .Replace("Service01 API", "Azeroth Questing Server", StringComparison.Ordinal)
+            .Replace("Service01", "Azeroth Questing Server", StringComparison.Ordinal)
             .Replace("Scan / Queue Now", "Scan for Observations", StringComparison.Ordinal)
             .Replace("Queued Snapshots", "Pending Observations", StringComparison.Ordinal)
             .Replace("queued snapshots", "pending observations", StringComparison.Ordinal)
@@ -93,5 +95,20 @@ internal static class UiTerminology
             .Replace("snapshots", "observations", StringComparison.Ordinal)
             .Replace("Snapshot", "Observation", StringComparison.Ordinal)
             .Replace("snapshot", "observation", StringComparison.Ordinal);
+
+        if (replacement.Contains("Azeroth Questing Server", StringComparison.Ordinal))
+        {
+            var endpointStart = replacement.IndexOf(" (http", StringComparison.OrdinalIgnoreCase);
+            if (endpointStart >= 0)
+            {
+                var endpointEnd = replacement.IndexOf(')', endpointStart);
+                if (endpointEnd > endpointStart)
+                {
+                    replacement = replacement.Remove(endpointStart, endpointEnd - endpointStart + 1);
+                }
+            }
+        }
+
+        return replacement;
     }
 }
