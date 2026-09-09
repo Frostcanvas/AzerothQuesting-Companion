@@ -48,7 +48,7 @@ internal static class UiTerminology
                         continue;
                     }
 
-                    var replacement = ReplaceTerms(value);
+                    var replacement = CleanForPlayer(value);
                     if (!string.Equals(value, replacement, StringComparison.Ordinal))
                     {
                         listBox.Items[i] = replacement;
@@ -62,7 +62,7 @@ internal static class UiTerminology
 
     private static void ReplaceControlText(Control control)
     {
-        var replacement = ReplaceTerms(control.Text);
+        var replacement = CleanForPlayer(control.Text);
         if (!string.Equals(control.Text, replacement, StringComparison.Ordinal))
         {
             control.Text = replacement;
@@ -71,14 +71,14 @@ internal static class UiTerminology
 
     private static void ReplaceToolStripText(ToolStripItem item)
     {
-        var replacement = ReplaceTerms(item.Text);
+        var replacement = CleanForPlayer(item.Text);
         if (!string.Equals(item.Text, replacement, StringComparison.Ordinal))
         {
             item.Text = replacement;
         }
     }
 
-    private static string ReplaceTerms(string? value)
+    internal static string CleanForPlayer(string? value)
     {
         if (string.IsNullOrEmpty(value))
         {
