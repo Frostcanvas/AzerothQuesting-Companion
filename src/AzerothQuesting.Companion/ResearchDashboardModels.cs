@@ -61,6 +61,9 @@ internal sealed class ResearchInstallationSummary
 
 internal sealed class ResearchObservationRow
 {
+    private string? _addonVersion;
+    private string? _companionVersion;
+
     [JsonPropertyName("quest_id")]
     public int QuestId { get; set; }
 
@@ -86,10 +89,18 @@ internal sealed class ResearchObservationRow
     public string Source { get; set; } = string.Empty;
 
     [JsonPropertyName("addon_version")]
-    public string? AddonVersion { get; set; }
+    public string? AddonVersion
+    {
+        get => _addonVersion is null ? null : UiTerminology.CleanForPlayer(_addonVersion);
+        set => _addonVersion = value;
+    }
 
     [JsonPropertyName("companion_version")]
-    public string? CompanionVersion { get; set; }
+    public string? CompanionVersion
+    {
+        get => _companionVersion is null ? null : UiTerminology.CleanForPlayer(_companionVersion);
+        set => _companionVersion = value;
+    }
 
     [JsonPropertyName("observed_at")]
     public DateTimeOffset? ObservedAt { get; set; }
@@ -130,8 +141,14 @@ internal sealed class ResearchClassEvidenceRow
 
 internal sealed class ResearchVersionRow
 {
+    private string _version = "unknown";
+
     [JsonPropertyName("version")]
-    public string Version { get; set; } = "unknown";
+    public string Version
+    {
+        get => UiTerminology.CleanForPlayer(_version);
+        set => _version = string.IsNullOrWhiteSpace(value) ? "unknown" : value;
+    }
 
     [JsonPropertyName("installations")]
     public int Installations { get; set; }
