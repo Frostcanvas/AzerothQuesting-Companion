@@ -1,0 +1,64 @@
+name: One-time sync Companion Beta 4 changelog release notes
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.event.head_commit.message == 'Sync current Companion Beta 4 changelog release notes'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Sync changelog publication status and GitHub release notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('CHANGELOG.md')
+          text = path.read_text(encoding='utf-8')
+          old = '## 0.1.9 Beta 4 - September 9, 2026'
+          new = '## 0.1.9 Beta 4 - September 9, 2026 - Available on GitHub Pre-release'
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('Could not find the expected Beta 4 changelog header.')
+              text = text.replace(old, new, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('CHANGELOG.md').read_text(encoding='utf-8').splitlines()
+          start = next((i for i, line in enumerate(lines) if line.startswith('## 0.1.9 Beta 4 -')), None)
+          if start is None:
+              raise SystemExit('Could not find Beta 4 changelog entry.')
+          end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith('## ')), len(lines))
+          section = '\n'.join(lines[start:end]).strip()
+          header = '''**Unsigned Beta testing build**
+
+This GitHub Pre-release is intentionally unsigned while Azeroth Questing Companion is waiting for code-signing setup. Windows SmartScreen or security software may warn before installation. Stable releases remain blocked unless they are signed.
+
+Code signing policy: https://github.com/Frostcanvas/AzerothQuesting-Companion/blob/main/CODE_SIGNING.md
+Privacy policy: https://github.com/Frostcanvas/AzerothQuesting-Companion/blob/main/PRIVACY.md'''
+          Path('release-notes-beta4.md').write_text(header + '\n\n' + section + '\n', encoding='utf-8')
+          PY
+
+          gh release edit companion-v0.1.9-beta.4 --notes-file release-notes-beta4.md
+
+          if ! git diff --quiet -- CHANGELOG.md; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add CHANGELOG.md
+            git commit -m "Mark Companion 0.1.9 Beta 4 as published prerelease"
+            git push
+          fi
