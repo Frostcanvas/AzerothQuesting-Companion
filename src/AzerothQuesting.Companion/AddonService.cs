@@ -88,6 +88,13 @@ internal sealed class AddonService
         progress?.Report("Checking the latest Azeroth Questing addon package...");
         var remote = await _github.GetLatestAddonAsync(cancellationToken);
 
+        if (string.IsNullOrWhiteSpace(remote.DownloadUrl))
+        {
+            throw new InvalidOperationException(
+                $"Azeroth Questing {remote.Version} is already on the Beta train. " +
+                "No newer Beta or golden Stable release is available yet.");
+        }
+
         var workRoot = Path.Combine(Path.GetTempPath(), "AzerothQuestingCompanion", Guid.NewGuid().ToString("N"));
         var zipPath = Path.Combine(workRoot, "AzerothQuesting.zip");
         var extractPath = Path.Combine(workRoot, "extract");
