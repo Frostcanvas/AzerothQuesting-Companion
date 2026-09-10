@@ -1,14 +1,15 @@
-# Azeroth Questing Companion downloads
+# Download Azeroth Questing Companion
 
-Use GitHub Releases for published Companion builds.
+Official Windows releases of **Azeroth Questing Companion** are published through the project's GitHub Releases page:
 
-- **Stable:** normal GitHub Releases only. Stable installers must be trusted-code-signed.
-- **Beta:** GitHub Pre-releases. Beta installers may be explicitly unsigned while trusted signing is unavailable.
+https://github.com/Frostcanvas/AzerothQuesting-Companion/releases
 
-The updater-visible installer filename is always:
+The current public release, v0.1.3, was published before the SignPath Foundation application and is unsigned. Beginning with the first approved SignPath-signed release, the release pipeline is intended to publish only installers that have passed the project's signing and Authenticode verification steps.
 
-`AzerothQuestingCompanion-Setup.exe`
+## Code signing policy
 
-The Companion's Stable/Beta channel selection determines which eligible published releases are considered. A GitHub Actions artifact by itself is not an updater-visible release.
+**Free code signing provided by SignPath.io, certificate by SignPath Foundation.**
 
-See `CHANGELOG.md` for authoritative release history and testing status.
+See [CODE_SIGNING.md](CODE_SIGNING.md) for the full code signing policy and [PRIVACY.md](PRIVACY.md) for the privacy policy.
+
+Official releases are built from this public repository by GitHub Actions. Signed release artifacts are required to be traceable to the repository commit and workflow run that produced them.
