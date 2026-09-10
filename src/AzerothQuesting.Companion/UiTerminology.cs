@@ -96,6 +96,18 @@ internal static class UiTerminology
         }
 
         var replacement = value
+            .Replace(
+                "Sync Pending Observations to Azeroth Questing Server",
+                "Sync Quest Data to Azeroth Questing Server",
+                StringComparison.Ordinal)
+            .Replace(
+                "Per-character completed-quest snapshots are kept only in the Companion local data folder and are never added to the server upload queue.",
+                "Character and realm stay on this PC. When server sync is enabled, an identity-free completed-quest contribution is sent to the Azeroth Questing Server so the public Quest Repository can learn which quests have been completed.",
+                StringComparison.Ordinal)
+            .Replace(
+                " (local only).",
+                " (character identity retained only on this PC).",
+                StringComparison.Ordinal)
             .Replace("Service01 API", "Azeroth Questing Server", StringComparison.Ordinal)
             .Replace("Service01", "Azeroth Questing Server", StringComparison.Ordinal)
             .Replace("Scan / Queue Now", "Scan for Observations", StringComparison.Ordinal)

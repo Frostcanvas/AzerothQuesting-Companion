@@ -37,6 +37,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
     private readonly string _retailPath;
     private readonly SnapshotQueue _queue;
     private readonly CompletedQuestStore _completedQuestStore;
+    private readonly CompletedQuestRepositoryQueue _completedQuestRepositoryQueue = new();
     private readonly List<FileSystemWatcher> _watchers = [];
     private readonly Dictionary<string, CancellationTokenSource> _debounce = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _sync = new();
@@ -209,11 +210,24 @@ internal sealed class SavedVariablesWatcher : IDisposable
         try
         {
             var result = await _completedQuestStore.ImportFileAsync(path, cancellationToken);
-            if (result.Found)
+            if (!result.Found)
             {
-                CompletedQuestDataProcessed?.Invoke(
+                return;
+            }
+
+            CompletedQuestDataProcessed?.Invoke(
+                this,
+                new CompletedQuestDataEventArgs(path, result.Character, result.Realm, result.QuestCount, result.Changed));
+
+            // The repository payload contains only the addon's identity-free AQC1
+            // wire data. Character and realm stay in the local folder path and
+            // are deliberately not copied into the upload queue.
+            var repositoryResult = await _completedQuestRepositoryQueue.EnqueueAsync(path, cancellationToken);
+            if (repositoryResult is not null)
+            {
+                SnapshotProcessed?.Invoke(
                     this,
-                    new CompletedQuestDataEventArgs(path, result.Character, result.Realm, result.QuestCount, result.Changed));
+                    new SnapshotQueuedEventArgs(path, repositoryResult.Queued, repositoryResult.Hash));
             }
         }
         catch (Exception ex)

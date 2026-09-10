@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.9 Beta 7 - September 10, 2026 - Available on GitHub Pre-release
+
+- **Changed** the completed-quest handoff from a local-only Companion feature into an automatic website-repository contribution when **Sync Quest Data to Azeroth Questing Server** is enabled. The existing per-character `AQC1` snapshot remains the source, so Azeroth Questing Addon `0.3.0-beta.5` does not need another addon build for this change.
+- **Added** a privacy-safe completed-quest repository queue. The Companion extracts only the identity-free `AQC1` wire payload from each toon SavedVariables file and never copies the local character name, realm, or SavedVariables path into the queued server contribution.
+- **Added** content-addressed deduplication for completed-quest repository contributions. The changing `AQC1` capture timestamp is normalized before hashing so an unchanged completed-quest set is not re-queued just because WoW saved or the player logged in again.
+- **Kept** `completed-quests.json` and `completed-quests.tsv` as a local player-facing cache that can contain character/realm, while the server-bound repository contribution remains identity-free.
+- **Changed** the player-facing synchronization description from **Sync Pending Observations** to **Sync Quest Data** because the same retryable Outbox can now carry structured research observations and sanitized completed-quest repository contributions.
+- **Updated** Companion privacy/documentation to explain the automatic Addon -> Companion -> Azeroth Questing Server -> Website Quest Repository path and the separation between local toon identity and public aggregate data.
+- **Changed** the Companion test build to `0.1.9-beta.7` with Windows file version `0.1.8.12` because Beta 6 had already been published/consumed before the website-repository contribution was requested.
+
+Beta 7 requires Azeroth Questing Addon `0.3.0-beta.5` or newer and Azeroth Questing Server API `0.2.5` or newer for the public Quest Repository. GitHub compilation/installer success does not count as Windows, WoW, live server, or website testing. After the server and Website Beta are deployed, verify that logging into a toon, running `/aq completed client`, and allowing WoW to save the per-character SavedVariables causes the Companion to queue/synchronize an identity-free contribution and that the Website Quest Repository gains completion evidence without exposing character or realm. Also confirm disabling server synchronization keeps the contribution local for later retry.
+
 ## 0.1.9 Beta 6 - September 10, 2026 - Available on GitHub Pre-release
 
 - **Added** a private local handoff for per-character completed-quest snapshots produced by Azeroth Questing Addon `0.3.0-beta.5` and newer. The Companion now watches the per-character `AzerothQuesting.lua` SavedVariables files in addition to the existing account-wide research SavedVariables file.
@@ -42,7 +54,6 @@ Beta 4 still requires Windows testing. Verify the Companion checks for updates a
 - Recorded the actual public-ingress test status: `https://aq.frostlabs.dev/api/v1/status` was successfully reached from a phone on cellular data and returned Azeroth Questing Server API `0.2.4`; the public `/research` page did not expose the internal dashboard. This confirms the public server route, not a full Companion synchronization test.
 
 Beta 3 still requires Windows testing. Verify the repaired Azeroth Questing icon on installed Windows surfaces, select the Beta channel, confirm the Companion uses `https://aq.frostlabs.dev`, then test registration, heartbeat, Submitted Research Data, Pending Observations synchronization, Companion self-update, and addon update from an outside network. Do not treat the cellular API test as proof that the Windows Companion path has passed. The WoW addon version is managed independently.
-
 
 ## 0.1.9 Beta 2 - September 8, 2026
 
@@ -98,7 +109,7 @@ This beta still needs testing on the player's Windows installation and against t
 
 ## 0.1.8 Beta 2 - September 8, 2026
 
-- Added a **Submitted Research Data** viewer in the Companion with total observations, unique quests, active installation counts, this installation's contribution count, recent anonymous observations, class-evidence summaries, and active addon/Companion version counts.
+- Added a **Submitted Research Data** viewer in the Companion with total observations, unique quests, active installation counts, this installation's contribution count, recent anonymous structured observations, class-evidence summaries, and active addon/Companion version counts.
 - Added authenticated Companion support for the Azeroth Questing Server research-dashboard API. The viewer does not expose installation IDs, account/character identifiers, bearer tokens, client observation keys, or raw SavedVariables payloads.
 - Restored the visible **Stable / Beta** update-channel control to the current dashboard so the existing channel-aware GitHub release logic is accessible to players.
 - Removed remaining player-facing `Service01` and private endpoint wording from the dashboard, sync status, dialogs, and privacy copy.
@@ -106,7 +117,7 @@ This beta still needs testing on the player's Windows installation and against t
 - Bumped the development Companion version to `0.1.8-beta.2`.
 - Requires Azeroth Questing Server API `0.2.1` for the Submitted Research Data viewer.
 
-This beta still needs testing on the player's Windows installation and against the live Azeroth Questing Server API `0.2.1`. A successful GitHub Actions build only confirms that the Windows application and installer compile/package; it does not count as live Windows, server, or in-game testing. The addon itself was not changed for this feature.
+This beta still needs testing on the player's Windows installation and against the live Azeroth Questing Server API `0.2.1`. A successful GitHub Actions build only confirms that the Windows application and installer compile/package; it does not count as live Windows, server, or in-game testing. The WoW addon itself was not changed for this feature.
 
 ## 0.1.8 Beta 1 - September 8, 2026
 
@@ -143,7 +154,7 @@ The v0.1.6 beta-channel build compiled and packaged successfully in GitHub Actio
 ## 0.1.5 - September 8, 2026
 
 - Added Service01 synchronization for Pending Observations using the private Azeroth Questing API on the FrostLabs LAN.
-- Added anonymous per-installation registration so each client receives its own bearer token; no shared backend secret is embedded in the public companion.
+- Added anonymous per-installation registration so each client receives its own bearer token; no shared server secret is embedded in the public companion.
 - Added structured v0.2.32+ observation uploads for quest/map/evidence, faction, class ID/token, level, completion, source, timestamp, and addon/client versions.
 - Kept compatibility upload support for already-queued pre-v0.2.32 SavedVariables snapshots so existing research is not silently discarded.
 - Added automatic retry behavior: files are deleted from the local Outbox only after Service01 accepts them; unavailable/failed uploads remain local.

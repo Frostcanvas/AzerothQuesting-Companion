@@ -2,9 +2,7 @@
 
 Windows companion application for the **Azeroth Questing** World of Warcraft addon.
 
-## Development version - v0.1.9-beta.2
-
-The latest public release remains v0.1.3 until trusted Windows code signing is approved and configured through SignPath Foundation.
+## Development version - v0.1.9-beta.7
 
 The companion currently:
 
@@ -14,10 +12,12 @@ The companion currently:
 - Installs, updates, or repairs Azeroth Questing from the public `Frostcanvas/AzerothQuesting` GitHub repository.
 - Refuses to change addon files while World of Warcraft is running.
 - Backs up the existing Azeroth Questing addon before replacing it.
-- Watches only the current `AzerothQuesting.lua` SavedVariables data for changes.
+- Watches only Azeroth Questing SavedVariables for changes.
 - Queues deduplicated **Pending Observations** under `%LOCALAPPDATA%\AzerothQuesting\Companion\Outbox` and synchronizes them to the Azeroth Questing Server when synchronization is enabled.
 - Uses per-installation bearer registration; no shared server secret is embedded in the public companion.
-- Uploads new v0.2.32+ structured quest observations with quest/map/evidence, faction, class, level, completion, source, and timestamps; older already-queued snapshots use the compatibility raw endpoint.
+- Uploads v0.2.32+ structured quest observations with quest/map/evidence, faction, class, level, completion, source, and timestamps; older already-queued snapshots use the compatibility raw endpoint.
+- Imports the addon's per-character completed-quest `AQC1` handoff into a local cache and, beginning with Beta 7, creates an identity-free completed-quest contribution for the public Quest Repository when server synchronization is enabled.
+- Keeps character and realm only in the player's local completed-quest cache; those identifiers are not copied into the Quest Repository contribution.
 - Runs in the Windows notification area so it can keep watching in the background.
 - Uses a dark dashboard-style interface with addon, update, WoW path, local data, and recent activity status.
 - Shows submitted research data in a privacy-preserving viewer with aggregate counts, recent anonymous observations, class evidence, and active addon/Companion version counts.
@@ -27,9 +27,15 @@ The companion currently:
 
 The companion does not detect, migrate, delete, watch, or otherwise manage the retired ZoneQuestGuide addon or its SavedVariables.
 
-Azeroth Questing Server synchronization uses the dedicated HTTPS endpoint `https://aq.frostlabs.dev` by default. The player-facing dashboard refers to this service as **Azeroth Questing Server** rather than exposing the private FrostLabs LAN address. Installations that still have the exact legacy LAN default are migrated to the HTTPS endpoint automatically; manually configured custom endpoints are preserved. The dashboard includes a **Sync Pending Observations to Azeroth Questing Server** checkbox, **Sync Now**, and a **Submitted Research Data** viewer. If the server is unavailable, Pending Observations remain in the local Outbox and are retried later. The Submitted Research Data viewer works with API `0.2.1`; the Companions Online heartbeat and collected-quest CSV export require Azeroth Questing Server API `0.2.2` or newer.
+Azeroth Questing Server synchronization uses the dedicated HTTPS endpoint configured by the application. The player-facing dashboard refers to this service as **Azeroth Questing Server** rather than exposing private FrostLabs infrastructure. The dashboard includes a **Sync Quest Data to Azeroth Questing Server** checkbox, **Sync Now**, and a **Submitted Research Data** viewer. If the server is unavailable, Pending Observations remain in the local Outbox and are retried later. Companion Beta 7 requires Azeroth Questing Server API `0.2.5` or newer for the website-backed Quest Repository view.
 
-The public endpoint is intended for controlled external beta testing. It is not considered working until Cloudflare DNS and the Services01 Caddy route have been deployed and a real outside-network Companion has successfully registered, heartbeated, and synchronized. The public reverse proxy exposes only the required Companion `/api/v1` routes; the full `/research` website remains LAN-only.
+## Completed quest repository handoff
+
+With Azeroth Questing Addon `0.3.0-beta.5` or newer, the Companion can import a toon-specific completed-quest snapshot from WoW's per-character SavedVariables. The local cache is written to `completed-quests.json` and a Google-Sheets-friendly `completed-quests.tsv` in the Companion data folder.
+
+Beginning with Companion `0.1.9-beta.7`, the same handoff also feeds the Azeroth Questing website's aggregate Quest Repository automatically when server synchronization is enabled. The Companion extracts only the identity-free `AQC1` payload, normalizes its changing capture timestamp for deduplication, and queues it through the existing retryable Outbox. Character and realm are derived only for the local cache and are never copied into the repository contribution.
+
+The website repository is community-learned data. It is not a complete Blizzard master list of every quest ever shipped.
 
 ## Windows installation and updates
 
@@ -46,8 +52,6 @@ The **Check for Updates** action checks both repositories:
 
 For companion updates, the app downloads the published setup package into `%LOCALAPPDATA%\AzerothQuesting\Companion\Updates`, verifies the GitHub SHA-256 digest when GitHub supplies one, starts the Windows installer with elevation, closes the old client, updates the installed files, and restarts the client.
 
-This replaces the v0.1.1-v0.1.2 temporary self-copy updater, which executed an unsigned helper from a randomized temporary directory and could be blocked or mistaken for malware by endpoint-security products. v0.1.4 also attempts to clean up those legacy temporary updater files when they are no longer locked.
-
 Addon updates are reported in the same check. Stable mode ignores GitHub prereleases; Beta mode considers both stable releases and GitHub prereleases and selects the newest compatible release. Use **Update Addon** to install the selected channel package. Addon updates are not applied while World of Warcraft is running.
 
 ## Code signing policy
@@ -56,35 +60,15 @@ Addon updates are reported in the same check. Stable mode ignores GitHub prerele
 
 See the full [Code signing policy](CODE_SIGNING.md) and [Privacy policy](PRIVACY.md).
 
-The repository is being prepared for SignPath Foundation's free open-source code-signing program. Public release builds use GitHub-hosted Windows runners and SignPath's GitHub trusted-build-system integration so signed binaries can be tied back to the repository, workflow run, and commit that built them.
+Public release builds use GitHub-hosted Windows runners and SignPath's GitHub trusted-build-system integration when signing is configured. A release build signs in two stages: the Companion executable is signed and verified before installer creation, then the completed installer is signed and verified before publication.
 
-A release build signs in two stages:
-
-1. Build and submit `AzerothQuestingCompanion.exe` to SignPath.
-2. Verify the signed executable and include it in the Windows installer.
-3. Build and submit `AzerothQuestingCompanion-Setup.exe` to SignPath.
-4. Verify the signed installer before publishing the GitHub Release.
-
-This two-stage process ensures that both the installed executable and the installer itself are signed.
-
-After SignPath Foundation approves the project, the GitHub repository will need:
-
-- Secret: `SIGNPATH_API_TOKEN`
-- Repository variable: `SIGNPATH_ORGANIZATION_ID`
-- Repository variable: `SIGNPATH_PROJECT_SLUG`
-- Repository variable: `SIGNPATH_SIGNING_POLICY_SLUG`
-- Repository variable: `SIGNPATH_EXECUTABLE_ARTIFACT_CONFIGURATION_SLUG`
-- Repository variable: `SIGNPATH_INSTALLER_ARTIFACT_CONFIGURATION_SLUG`
-
-The SignPath GitHub App must also be allowed to access this repository for trusted-build origin verification.
-
-Until SignPath approval and configuration are complete, development artifacts remain unsigned and Windows SmartScreen or endpoint-security products can still warn about them. Do not disable security software or add broad exclusions just to run the companion.
+While trusted signing is unavailable, Beta Pre-releases may be published as explicitly unsigned testing builds. Stable Companion releases remain blocked unless signing is available and valid. Windows SmartScreen or endpoint-security products may warn about unsigned/reputation-new Beta builds; do not disable security software or add broad exclusions just to run the companion.
 
 ## Privacy
 
-The companion does **not** read World of Warcraft process memory, capture the screen, record gameplay, inspect other applications, or take screenshots. It only works with Azeroth Questing addon files and `AzerothQuesting.lua` SavedVariables on disk. Pending observations are stored in the local Outbox and use hashes rather than character/account names in their filenames.
+The companion does **not** read World of Warcraft process memory, capture the screen, record gameplay, inspect other applications, or take screenshots. It only works with Azeroth Questing addon files and Azeroth Questing SavedVariables on disk.
 
-Azeroth Questing Server synchronization can upload Pending Observations to the dedicated HTTPS API at `https://aq.frostlabs.dev`. Synchronization can be disabled at any time from the dashboard; failed uploads remain local for retry. The Submitted Research Data viewer uses the same per-installation authentication to read privacy-preserving aggregates and anonymous observation rows. See `PRIVACY.md` for the exact observation fields.
+The local completed-quest cache may contain character and realm because it is for the player's own use. The website repository contribution deliberately excludes both. Public Quest Repository data is aggregate-only and does not expose character names, realms, installation IDs, bearer tokens, peer sender identities, or raw SavedVariables. See `PRIVACY.md` for the exact behavior.
 
 ## Build
 
@@ -100,8 +84,4 @@ dotnet run --project src/AzerothQuesting.Companion/AzerothQuesting.Companion.csp
 
 - Addon: `Frostcanvas/AzerothQuesting`
 - Companion: `Frostcanvas/AzerothQuesting-Companion`
-
-
-## Completed quest handoff
-
-With Azeroth Questing Addon 0.3.0 Beta 5 or newer, the Companion can import a toon-specific completed-quest snapshot from WoW's per-character SavedVariables. The imported cache stays local to the PC and is written to `completed-quests.json` and a Google-Sheets-friendly `completed-quests.tsv` in the Companion data folder. It is separate from Pending Observations and is not uploaded to Azeroth Questing Server.
+- Website: `Frostcanvas/AzerothQuestingwebsite`
