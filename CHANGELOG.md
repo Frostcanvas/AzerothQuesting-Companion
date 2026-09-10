@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.9 Beta 5 - September 9, 2026 - Development
+## 0.1.9 Beta 5 - September 9, 2026 - Available on GitHub Pre-release
 
 - **Changed** the Companion application artwork to a clean **AQ** monogram that matches the dark purple-and-yellow Azeroth Questing website branding.
 - **Fixed** the partial/cropped Windows shortcut icon seen while testing Beta 4 by rebuilding `AzerothQuesting.ico` as a true multi-resolution Windows icon with 16, 32, 48, 64, 128, and 256 pixel images plus transparent breathing room around the badge so Windows can scale it without cutting off the artwork.
