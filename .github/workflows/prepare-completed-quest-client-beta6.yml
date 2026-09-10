@@ -1,0 +1,774 @@
+name: Prepare Companion Beta 6 completed quest handoff
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/prepare-completed-quest-client-beta6.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Add local completed-quest ingestion
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > src/AzerothQuesting.Companion/CompletedQuestStore.cs <<'EOF'
+          using System.Text;
+          using System.Text.Json;
+          using System.Text.RegularExpressions;
+
+          namespace AzerothQuesting.Companion;
+
+          internal sealed record CompletedQuestImportResult(
+              bool Found,
+              bool Changed,
+              string Character,
+              string Realm,
+              int QuestCount);
+
+          internal sealed class CompletedQuestStore
+          {
+              private static readonly Regex WireRegex = new(
+                  @"AQC1\|1\|(?:Alliance|Horde|Neutral|Unknown)\|[A-Z]+\|\d{1,3}\|\d+\|[A-Za-z0-9._-]+\|[0-9A-F~,]*",
+                  RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+              private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+              {
+                  WriteIndented = true,
+              };
+
+              private readonly object _sync = new();
+              private readonly Dictionary<string, CompletedQuestCharacterSnapshot> _characters =
+                  new(StringComparer.OrdinalIgnoreCase);
+
+              public CompletedQuestStore()
+              {
+                  AppPaths.EnsureCreated();
+                  Load();
+                  lock (_sync)
+                  {
+                      PersistUnlocked();
+                  }
+              }
+
+              public int CharacterCount
+              {
+                  get
+                  {
+                      lock (_sync)
+                      {
+                          return _characters.Count;
+                      }
+                  }
+              }
+
+              public int QuestRecordCount
+              {
+                  get
+                  {
+                      lock (_sync)
+                      {
+                          return _characters.Values.Sum(item => item.Quests.Count);
+                      }
+                  }
+              }
+
+              public string TsvPath => AppPaths.CompletedQuestsTsv;
+
+              public static bool TryGetCharacterIdentity(string path, out string realm, out string character)
+              {
+                  realm = string.Empty;
+                  character = string.Empty;
+
+                  var file = new FileInfo(path);
+                  if (!string.Equals(file.Name, "AzerothQuesting.lua", StringComparison.OrdinalIgnoreCase))
+                  {
+                      return false;
+                  }
+
+                  var savedVariables = file.Directory;
+                  var characterDirectory = savedVariables?.Parent;
+                  var realmDirectory = characterDirectory?.Parent;
+                  var accountDirectory = realmDirectory?.Parent;
+                  var accountRoot = accountDirectory?.Parent;
+
+                  if (savedVariables is null
+                      || !string.Equals(savedVariables.Name, "SavedVariables", StringComparison.OrdinalIgnoreCase)
+                      || characterDirectory is null
+                      || realmDirectory is null
+                      || accountDirectory is null
+                      || accountRoot is null
+                      || !string.Equals(accountRoot.Name, "Account", StringComparison.OrdinalIgnoreCase))
+                  {
+                      return false;
+                  }
+
+                  character = characterDirectory.Name;
+                  realm = realmDirectory.Name;
+                  return !string.IsNullOrWhiteSpace(character) && !string.IsNullOrWhiteSpace(realm);
+              }
+
+              public async Task<CompletedQuestImportResult> ImportFileAsync(
+                  string path,
+                  CancellationToken cancellationToken = default)
+              {
+                  if (!TryGetCharacterIdentity(path, out var realm, out var character))
+                  {
+                      return new CompletedQuestImportResult(false, false, string.Empty, string.Empty, 0);
+                  }
+
+                  var text = await File.ReadAllTextAsync(path, cancellationToken);
+                  return ImportSnapshot(text, realm, character);
+              }
+
+              private CompletedQuestImportResult ImportSnapshot(string text, string realm, string character)
+              {
+                  CompletedQuestCharacterSnapshot? newest = null;
+                  foreach (Match match in WireRegex.Matches(text))
+                  {
+                      var parsed = ParseWire(match.Value, realm, character);
+                      if (parsed is not null && (newest is null || parsed.CapturedAt > newest.CapturedAt))
+                      {
+                          newest = parsed;
+                      }
+                  }
+
+                  if (newest is null)
+                  {
+                      return new CompletedQuestImportResult(false, false, character, realm, 0);
+                  }
+
+                  lock (_sync)
+                  {
+                      var key = realm + "\0" + character;
+                      if (_characters.TryGetValue(key, out var existing) && existing.CapturedAt > newest.CapturedAt)
+                      {
+                          return new CompletedQuestImportResult(true, false, character, realm, existing.Quests.Count);
+                      }
+
+                      var changed = existing is null || !SnapshotsEqual(existing, newest);
+                      if (changed)
+                      {
+                          _characters[key] = newest;
+                          PersistUnlocked();
+                      }
+
+                      return new CompletedQuestImportResult(true, changed, character, realm, newest.Quests.Count);
+                  }
+              }
+
+              private static CompletedQuestCharacterSnapshot? ParseWire(string wire, string realm, string character)
+              {
+                  var parts = wire.Split('|', 8, StringSplitOptions.None);
+                  if (parts.Length != 8 || parts[0] != "AQC1" || parts[1] != "1")
+                  {
+                      return null;
+                  }
+
+                  if (!int.TryParse(parts[4], out var level) || level < 0 || level > 255
+                      || !long.TryParse(parts[5], out var capturedUnix) || capturedUnix <= 0)
+                  {
+                      return null;
+                  }
+
+                  DateTimeOffset capturedAt;
+                  try
+                  {
+                      capturedAt = DateTimeOffset.FromUnixTimeSeconds(capturedUnix);
+                  }
+                  catch (ArgumentOutOfRangeException)
+                  {
+                      return null;
+                  }
+
+                  var quests = new Dictionary<int, string>();
+                  if (!string.IsNullOrWhiteSpace(parts[7]))
+                  {
+                      foreach (var item in parts[7].Split(',', StringSplitOptions.RemoveEmptyEntries))
+                      {
+                          var pair = item.Split('~', 2, StringSplitOptions.None);
+                          if (pair.Length != 2 || !int.TryParse(pair[0], out var questId) || questId <= 0)
+                          {
+                              continue;
+                          }
+
+                          quests[questId] = DecodeHex(pair[1]);
+                      }
+                  }
+
+                  return new CompletedQuestCharacterSnapshot
+                  {
+                      Character = character,
+                      Realm = realm,
+                      Faction = parts[2],
+                      ClassFile = parts[3],
+                      Level = level,
+                      CapturedAt = capturedAt,
+                      AddonVersion = parts[6],
+                      Quests = quests,
+                  };
+              }
+
+              private static string DecodeHex(string value)
+              {
+                  if (string.IsNullOrEmpty(value) || value.Length % 2 != 0)
+                  {
+                      return string.Empty;
+                  }
+
+                  try
+                  {
+                      return Encoding.UTF8.GetString(Convert.FromHexString(value));
+                  }
+                  catch (FormatException)
+                  {
+                      return string.Empty;
+                  }
+              }
+
+              private static bool SnapshotsEqual(
+                  CompletedQuestCharacterSnapshot left,
+                  CompletedQuestCharacterSnapshot right)
+              {
+                  if (!string.Equals(left.Character, right.Character, StringComparison.Ordinal)
+                      || !string.Equals(left.Realm, right.Realm, StringComparison.Ordinal)
+                      || !string.Equals(left.Faction, right.Faction, StringComparison.Ordinal)
+                      || !string.Equals(left.ClassFile, right.ClassFile, StringComparison.Ordinal)
+                      || left.Level != right.Level
+                      || left.CapturedAt != right.CapturedAt
+                      || !string.Equals(left.AddonVersion, right.AddonVersion, StringComparison.Ordinal)
+                      || left.Quests.Count != right.Quests.Count)
+                  {
+                      return false;
+                  }
+
+                  foreach (var pair in left.Quests)
+                  {
+                      if (!right.Quests.TryGetValue(pair.Key, out var name)
+                          || !string.Equals(pair.Value, name, StringComparison.Ordinal))
+                      {
+                          return false;
+                      }
+                  }
+
+                  return true;
+              }
+
+              private void Load()
+              {
+                  if (!File.Exists(AppPaths.CompletedQuestsFile))
+                  {
+                      return;
+                  }
+
+                  try
+                  {
+                      var json = File.ReadAllText(AppPaths.CompletedQuestsFile);
+                      var document = JsonSerializer.Deserialize<CompletedQuestStoreDocument>(json, JsonOptions);
+                      foreach (var snapshot in document?.Characters ?? [])
+                      {
+                          if (string.IsNullOrWhiteSpace(snapshot.Character) || string.IsNullOrWhiteSpace(snapshot.Realm))
+                          {
+                              continue;
+                          }
+
+                          snapshot.Quests ??= new Dictionary<int, string>();
+                          _characters[snapshot.Realm + "\0" + snapshot.Character] = snapshot;
+                      }
+                  }
+                  catch (JsonException)
+                  {
+                      // Keep a damaged local cache from preventing the Companion from starting.
+                  }
+                  catch (IOException)
+                  {
+                      // A later SavedVariables scan can rebuild the local cache.
+                  }
+              }
+
+              private void PersistUnlocked()
+              {
+                  AppPaths.EnsureCreated();
+                  var document = new CompletedQuestStoreDocument
+                  {
+                      Schema = 1,
+                      Characters = _characters.Values
+                          .OrderBy(item => item.Realm, StringComparer.OrdinalIgnoreCase)
+                          .ThenBy(item => item.Character, StringComparer.OrdinalIgnoreCase)
+                          .ToList(),
+                  };
+
+                  var json = JsonSerializer.Serialize(document, JsonOptions);
+                  var temporary = AppPaths.CompletedQuestsFile + ".tmp";
+                  File.WriteAllText(temporary, json, Encoding.UTF8);
+                  File.Move(temporary, AppPaths.CompletedQuestsFile, overwrite: true);
+                  File.WriteAllText(AppPaths.CompletedQuestsTsv, BuildTsvUnlocked(), Encoding.UTF8);
+              }
+
+              private string BuildTsvUnlocked()
+              {
+                  var lines = new List<string>
+                  {
+                      "Character\tRealm\tFaction\tClass\tLevel\tQuest ID\tQuest Name\tCaptured At\tAddon Version",
+                  };
+
+                  foreach (var snapshot in _characters.Values
+                               .OrderBy(item => item.Realm, StringComparer.OrdinalIgnoreCase)
+                               .ThenBy(item => item.Character, StringComparer.OrdinalIgnoreCase))
+                  {
+                      foreach (var quest in snapshot.Quests.OrderBy(item => item.Key))
+                      {
+                          lines.Add(string.Join('\t',
+                              SafeField(snapshot.Character),
+                              SafeField(snapshot.Realm),
+                              SafeField(snapshot.Faction),
+                              SafeField(snapshot.ClassFile),
+                              snapshot.Level.ToString(),
+                              quest.Key.ToString(),
+                              SafeField(quest.Value),
+                              snapshot.CapturedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz"),
+                              SafeField(snapshot.AddonVersion)));
+                      }
+                  }
+
+                  return string.Join(Environment.NewLine, lines) + Environment.NewLine;
+              }
+
+              private static string SafeField(string? value)
+              {
+                  return (value ?? string.Empty)
+                      .Replace('\t', ' ')
+                      .Replace('\r', ' ')
+                      .Replace('\n', ' ');
+              }
+
+              private sealed class CompletedQuestStoreDocument
+              {
+                  public int Schema { get; set; } = 1;
+                  public List<CompletedQuestCharacterSnapshot> Characters { get; set; } = [];
+              }
+
+              private sealed class CompletedQuestCharacterSnapshot
+              {
+                  public string Character { get; set; } = string.Empty;
+                  public string Realm { get; set; } = string.Empty;
+                  public string Faction { get; set; } = string.Empty;
+                  public string ClassFile { get; set; } = string.Empty;
+                  public int Level { get; set; }
+                  public DateTimeOffset CapturedAt { get; set; }
+                  public string AddonVersion { get; set; } = string.Empty;
+                  public Dictionary<int, string> Quests { get; set; } = new();
+              }
+          }
+          EOF
+
+          cat > src/AzerothQuesting.Companion/SavedVariablesWatcher.cs <<'EOF'
+          namespace AzerothQuesting.Companion;
+
+          internal sealed class SnapshotQueuedEventArgs : EventArgs
+          {
+              public SnapshotQueuedEventArgs(string sourcePath, bool queued, string hash)
+              {
+                  SourcePath = sourcePath;
+                  Queued = queued;
+                  Hash = hash;
+              }
+
+              public string SourcePath { get; }
+              public bool Queued { get; }
+              public string Hash { get; }
+          }
+
+          internal sealed class CompletedQuestDataEventArgs : EventArgs
+          {
+              public CompletedQuestDataEventArgs(string sourcePath, string character, string realm, int questCount, bool changed)
+              {
+                  SourcePath = sourcePath;
+                  Character = character;
+                  Realm = realm;
+                  QuestCount = questCount;
+                  Changed = changed;
+              }
+
+              public string SourcePath { get; }
+              public string Character { get; }
+              public string Realm { get; }
+              public int QuestCount { get; }
+              public bool Changed { get; }
+          }
+
+          internal sealed class SavedVariablesWatcher : IDisposable
+          {
+              private readonly string _retailPath;
+              private readonly SnapshotQueue _queue;
+              private readonly CompletedQuestStore _completedQuestStore;
+              private readonly List<FileSystemWatcher> _watchers = [];
+              private readonly Dictionary<string, CancellationTokenSource> _debounce = new(StringComparer.OrdinalIgnoreCase);
+              private readonly object _sync = new();
+              private bool _disposed;
+
+              public SavedVariablesWatcher(string retailPath, SnapshotQueue queue, CompletedQuestStore completedQuestStore)
+              {
+                  _retailPath = retailPath;
+                  _queue = queue;
+                  _completedQuestStore = completedQuestStore;
+              }
+
+              public event EventHandler<SnapshotQueuedEventArgs>? SnapshotProcessed;
+              public event EventHandler<CompletedQuestDataEventArgs>? CompletedQuestDataProcessed;
+              public event EventHandler<string>? WatcherError;
+
+              public int DataFileCount => EnumerateResearchDataFiles().Count();
+
+              public void Start()
+              {
+                  ThrowIfDisposed();
+                  StopWatchers();
+
+                  var accountRoot = Path.Combine(_retailPath, "WTF", "Account");
+                  if (!Directory.Exists(accountRoot))
+                  {
+                      return;
+                  }
+
+                  foreach (var accountDirectory in Directory.EnumerateDirectories(accountRoot))
+                  {
+                      var watcher = new FileSystemWatcher(accountDirectory)
+                      {
+                          Filter = "AzerothQuesting.lua",
+                          IncludeSubdirectories = true,
+                          NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                          EnableRaisingEvents = true,
+                      };
+
+                      watcher.Changed += OnChanged;
+                      watcher.Created += OnChanged;
+                      watcher.Renamed += OnRenamed;
+                      watcher.Error += OnError;
+                      _watchers.Add(watcher);
+                  }
+              }
+
+              public async Task ScanExistingAsync(CancellationToken cancellationToken = default)
+              {
+                  foreach (var file in EnumerateResearchDataFiles())
+                  {
+                      cancellationToken.ThrowIfCancellationRequested();
+                      await ProcessResearchFileAsync(file, cancellationToken);
+                  }
+
+                  foreach (var file in EnumerateCompletedQuestFiles())
+                  {
+                      cancellationToken.ThrowIfCancellationRequested();
+                      await ProcessCompletedQuestFileAsync(file, cancellationToken);
+                  }
+              }
+
+              private IEnumerable<string> EnumerateResearchDataFiles()
+              {
+                  var accountRoot = Path.Combine(_retailPath, "WTF", "Account");
+                  if (!Directory.Exists(accountRoot))
+                  {
+                      return [];
+                  }
+
+                  var files = new List<string>();
+                  foreach (var accountDirectory in Directory.EnumerateDirectories(accountRoot))
+                  {
+                      var path = Path.Combine(accountDirectory, "SavedVariables", "AzerothQuesting.lua");
+                      if (File.Exists(path))
+                      {
+                          files.Add(path);
+                      }
+                  }
+
+                  return files;
+              }
+
+              private IEnumerable<string> EnumerateCompletedQuestFiles()
+              {
+                  var accountRoot = Path.Combine(_retailPath, "WTF", "Account");
+                  if (!Directory.Exists(accountRoot))
+                  {
+                      return [];
+                  }
+
+                  var files = new List<string>();
+                  foreach (var accountDirectory in Directory.EnumerateDirectories(accountRoot))
+                  {
+                      try
+                      {
+                          files.AddRange(Directory
+                              .EnumerateFiles(accountDirectory, "AzerothQuesting.lua", SearchOption.AllDirectories)
+                              .Where(path => CompletedQuestStore.TryGetCharacterIdentity(path, out _, out _)));
+                      }
+                      catch (UnauthorizedAccessException)
+                      {
+                          // Keep scanning the remaining accounts.
+                      }
+                      catch (IOException)
+                      {
+                          // A transient WoW write can be retried on the next scan/change event.
+                      }
+                  }
+
+                  return files;
+              }
+
+              private void OnChanged(object sender, FileSystemEventArgs e)
+              {
+                  if (IsTrackedFile(e.FullPath))
+                  {
+                      Debounce(e.FullPath);
+                  }
+              }
+
+              private void OnRenamed(object sender, RenamedEventArgs e)
+              {
+                  if (IsTrackedFile(e.FullPath))
+                  {
+                      Debounce(e.FullPath);
+                  }
+              }
+
+              private void OnError(object sender, ErrorEventArgs e)
+              {
+                  WatcherError?.Invoke(this, e.GetException().Message);
+              }
+
+              private static bool IsTrackedFile(string path)
+              {
+                  return string.Equals(
+                      Path.GetFileName(path),
+                      "AzerothQuesting.lua",
+                      StringComparison.OrdinalIgnoreCase);
+              }
+
+              private async Task ProcessPathAsync(string path, CancellationToken cancellationToken)
+              {
+                  if (CompletedQuestStore.TryGetCharacterIdentity(path, out _, out _))
+                  {
+                      await ProcessCompletedQuestFileAsync(path, cancellationToken);
+                  }
+                  else
+                  {
+                      await ProcessResearchFileAsync(path, cancellationToken);
+                  }
+              }
+
+              private async Task ProcessResearchFileAsync(string path, CancellationToken cancellationToken)
+              {
+                  try
+                  {
+                      var result = await _queue.EnqueueAsync(path, cancellationToken);
+                      SnapshotProcessed?.Invoke(this, new SnapshotQueuedEventArgs(path, result.Queued, result.Hash));
+                  }
+                  catch (Exception ex)
+                  {
+                      WatcherError?.Invoke(this, ex.Message);
+                  }
+              }
+
+              private async Task ProcessCompletedQuestFileAsync(string path, CancellationToken cancellationToken)
+              {
+                  try
+                  {
+                      var result = await _completedQuestStore.ImportFileAsync(path, cancellationToken);
+                      if (result.Found)
+                      {
+                          CompletedQuestDataProcessed?.Invoke(
+                              this,
+                              new CompletedQuestDataEventArgs(path, result.Character, result.Realm, result.QuestCount, result.Changed));
+                      }
+                  }
+                  catch (Exception ex)
+                  {
+                      WatcherError?.Invoke(this, ex.Message);
+                  }
+              }
+
+              private void Debounce(string path)
+              {
+                  CancellationTokenSource cts;
+                  lock (_sync)
+                  {
+                      if (_debounce.Remove(path, out var previous))
+                      {
+                          previous.Cancel();
+                          previous.Dispose();
+                      }
+
+                      cts = new CancellationTokenSource();
+                      _debounce[path] = cts;
+                  }
+
+                  _ = Task.Run(async () =>
+                  {
+                      try
+                      {
+                          await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+                          await ProcessPathAsync(path, cts.Token);
+                      }
+                      catch (OperationCanceledException)
+                      {
+                          // A newer file event replaced this one.
+                      }
+                      catch (Exception ex)
+                      {
+                          WatcherError?.Invoke(this, ex.Message);
+                      }
+                      finally
+                      {
+                          lock (_sync)
+                          {
+                              if (_debounce.TryGetValue(path, out var current) && ReferenceEquals(current, cts))
+                              {
+                                  _debounce.Remove(path);
+                              }
+                          }
+
+                          cts.Dispose();
+                      }
+                  });
+              }
+
+              private void StopWatchers()
+              {
+                  foreach (var watcher in _watchers)
+                  {
+                      watcher.EnableRaisingEvents = false;
+                      watcher.Dispose();
+                  }
+                  _watchers.Clear();
+              }
+
+              private void ThrowIfDisposed()
+              {
+                  ObjectDisposedException.ThrowIf(_disposed, this);
+              }
+
+              public void Dispose()
+              {
+                  if (_disposed)
+                  {
+                      return;
+                  }
+
+                  _disposed = true;
+                  StopWatchers();
+
+                  lock (_sync)
+                  {
+                      foreach (var cts in _debounce.Values)
+                      {
+                          cts.Cancel();
+                          cts.Dispose();
+                      }
+                      _debounce.Clear();
+                  }
+              }
+          }
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('src/AzerothQuesting.Companion/AppPaths.cs')
+          text = app.read_text(encoding='utf-8')
+          anchor = '    public static string SettingsFile { get; } = Path.Combine(Root, "settings.json");\n'
+          insert = anchor + '    public static string CompletedQuestsFile { get; } = Path.Combine(Root, "completed-quests.json");\n    public static string CompletedQuestsTsv { get; } = Path.Combine(Root, "completed-quests.tsv");\n'
+          if 'CompletedQuestsFile' not in text:
+              text = text.replace(anchor, insert, 1)
+          app.write_text(text, encoding='utf-8')
+
+          main = Path('src/AzerothQuesting.Companion/MainForm.cs')
+          text = main.read_text(encoding='utf-8')
+          if 'private readonly CompletedQuestStore _completedQuestStore' not in text:
+              text = text.replace(
+                  '    private readonly SnapshotQueue _snapshotQueue = new();\n',
+                  '    private readonly SnapshotQueue _snapshotQueue = new();\n    private readonly CompletedQuestStore _completedQuestStore = new();\n',
+                  1)
+          text = text.replace(
+              '        cards.Controls.Add(CreateCard("SavedVariables Files", _dataValue, "Currently watched"), 1, 1);',
+              '        cards.Controls.Add(CreateCard("Completed Quest Toons", _dataValue, "Local Companion data"), 1, 1);')
+          text = text.replace(
+              '        _watcher = new SavedVariablesWatcher(_retailPath, _snapshotQueue);\n        _watcher.SnapshotProcessed += WatcherOnSnapshotProcessed;',
+              '        _watcher = new SavedVariablesWatcher(_retailPath, _snapshotQueue, _completedQuestStore);\n        _watcher.SnapshotProcessed += WatcherOnSnapshotProcessed;\n        _watcher.CompletedQuestDataProcessed += WatcherOnCompletedQuestDataProcessed;')
+          button_anchor = '        var data = CreateSecondaryButton("View Submitted Data");\n        data.Click += (_, _) => OpenResearchData();\n'
+          if 'Open Completed Quest Data' not in text:
+              text = text.replace(
+                  button_anchor,
+                  button_anchor + '        var completed = CreateSecondaryButton("Open Completed Quest Data");\n        completed.Click += (_, _) => OpenCompletedQuestData();\n',
+                  1)
+              text = text.replace(
+                  '        buttons.Controls.Add(data);\n        buttons.Controls.Add(syncNow);',
+                  '        buttons.Controls.Add(data);\n        buttons.Controls.Add(completed);\n        buttons.Controls.Add(syncNow);',
+                  1)
+          privacy_old = 'Privacy: the companion reads only Azeroth Questing files and SavedVariables on disk. It does not inspect WoW process memory. When Azeroth Questing Server sync is enabled, only Azeroth Questing observation data is uploaded; disable the checkbox above to keep Pending Observations local.'
+          privacy_new = 'Privacy: the companion reads only Azeroth Questing files and SavedVariables on disk. It does not inspect WoW process memory. Anonymous research observations can be uploaded when Azeroth Questing Server sync is enabled. Per-character completed-quest snapshots are kept only in the Companion local data folder and are never added to the server upload queue.'
+          text = text.replace(privacy_old, privacy_new)
+          handler_anchor = '    private void WatcherOnError(object? sender, string message)\n'
+          if 'WatcherOnCompletedQuestDataProcessed' not in text.split(handler_anchor)[0]:
+              handler = '''    private void WatcherOnCompletedQuestDataProcessed(object? sender, CompletedQuestDataEventArgs e)\n    {\n        SafeUi(() =>\n        {\n            _lastDataValue.Text = e.Changed\n                ? $"{DateTime.Now:g} - completed quests"\n                : $"{DateTime.Now:g} - completed unchanged";\n            RefreshLocalStatus();\n            if (e.Changed)\n            {\n                SetStatus($"Received {e.QuestCount} completed quests for {e.Character}-{e.Realm} from the addon.");\n                AddActivity($"Completed quest data received for {e.Character}-{e.Realm}: {e.QuestCount} quests (local only).");\n            }\n        });\n    }\n\n'''
+              text = text.replace(handler_anchor, handler + handler_anchor, 1)
+          text = text.replace(
+              '        _dataValue.Text = (_watcher?.DataFileCount ?? 0).ToString();',
+              '        _dataValue.Text = _completedQuestStore.CharacterCount.ToString();')
+          research_anchor = '    private void OpenResearchData()\n'
+          if 'private void OpenCompletedQuestData()' not in text:
+              completed_method = '''    private void OpenCompletedQuestData()\n    {\n        AppPaths.EnsureCreated();\n        OpenPath(AppPaths.Root);\n        SetStatus($"Completed quest data is stored locally in {Path.GetFileName(_completedQuestStore.TsvPath)}.");\n        AddActivity($"Opened local completed quest data folder ({_completedQuestStore.CharacterCount} toon(s), {_completedQuestStore.QuestRecordCount} quest rows).");\n    }\n\n'''
+              text = text.replace(research_anchor, completed_method + research_anchor, 1)
+          main.write_text(text, encoding='utf-8')
+
+          csproj = Path('src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj')
+          text = csproj.read_text(encoding='utf-8')
+          text = text.replace('<Version>0.1.9-beta.5</Version>', '<Version>0.1.9-beta.6</Version>', 1)
+          text = text.replace('<FileVersion>0.1.8.10</FileVersion>', '<FileVersion>0.1.8.11</FileVersion>', 1)
+          csproj.write_text(text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          heading = '# Changelog\n\n'
+          entry = '''## 0.1.9 Beta 6 - September 10, 2026 - Available on GitHub Pre-release\n\n- **Added** a private local handoff for per-character completed-quest snapshots produced by Azeroth Questing Addon `0.3.0-beta.5` and newer. The Companion now watches the per-character `AzerothQuesting.lua` SavedVariables files in addition to the existing account-wide research SavedVariables file.\n- **Added** a local completed-quest cache and Google-Sheets-friendly `completed-quests.tsv` under the Companion data folder. The cache is grouped by the character and realm derived from the local WoW folder path and retains faction, class, level, quest ID, quest title when available, capture time, and addon version.\n- **Changed** completed-quest handoff data to remain completely separate from Pending Observations and Azeroth Questing Server synchronization. Per-character completion files are imported locally and are never placed in the server upload queue. Existing account-wide `AQO1` research synchronization is unchanged.\n- **Improved** the main dashboard by changing the former SavedVariables-file counter to **Completed Quest Toons** and adding **Open Completed Quest Data**, which opens the local Companion data folder containing the TSV/JSON cache.\n- **Improved** privacy compatibility by deriving character and realm only on the user's PC from the per-character SavedVariables path. The `AQC1` wire payload itself does not contain a character name or realm.\n- **Changed** the Companion test build to `0.1.9-beta.6` with Windows file version `0.1.8.11` because Beta 5 had already been published/consumed before this addon-to-Companion handoff was added.\n\nBeta 6 requires Azeroth Questing Addon `0.3.0-beta.5` or newer for the new completed-quest handoff. GitHub compilation/installer success does not count as Windows runtime or WoW testing. After both Betas are installed, keep the Companion running, log into a toon, run `/aq completed client` and `/reload` (or log out), then verify the Companion activity shows that toon and quest count, the **Completed Quest Toons** count increases, and `completed-quests.tsv` contains the expected per-quest rows. Confirm Pending Observations/server research counts do not increase merely because a completed-quest snapshot was imported. No successful Windows, WoW, or live server test is claimed yet.\n\n'''
+          if '## 0.1.9 Beta 6 -' not in text:
+              if not text.startswith(heading):
+                  raise SystemExit('Unexpected Companion changelog heading')
+              text = heading + entry + text[len(heading):]
+          changelog.write_text(text, encoding='utf-8')
+
+          privacy = Path('PRIVACY.md')
+          text = privacy.read_text(encoding='utf-8')
+          marker = '## Per-character completed quest data (Beta 6)'
+          if marker not in text:
+              text += '''\n\n## Per-character completed quest data (Beta 6)\n\nAzeroth Questing Companion can read the addon's per-character completed-quest SavedVariables handoff. Character and realm are derived locally from the World of Warcraft folder path so the addon wire payload does not need to contain those identifiers. This completed-quest cache is stored only in the Companion local data folder (`completed-quests.json` and `completed-quests.tsv`) and is not added to Pending Observations or uploaded to Azeroth Questing Server by this feature.\n'''
+          privacy.write_text(text, encoding='utf-8')
+
+          readme = Path('README.md')
+          text = readme.read_text(encoding='utf-8')
+          marker = '## Completed quest handoff'
+          if marker not in text:
+              text += '''\n\n## Completed quest handoff\n\nWith Azeroth Questing Addon 0.3.0 Beta 5 or newer, the Companion can import a toon-specific completed-quest snapshot from WoW's per-character SavedVariables. The imported cache stays local to the PC and is written to `completed-quests.json` and a Google-Sheets-friendly `completed-quests.tsv` in the Companion data folder. It is separate from Pending Observations and is not uploaded to Azeroth Questing Server.\n'''
+          readme.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit Companion Beta 6
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md PRIVACY.md README.md src/AzerothQuesting.Companion
+          git commit -m 'Release Companion v0.1.9-beta.6 completed quest handoff'
+          git push origin HEAD:main
