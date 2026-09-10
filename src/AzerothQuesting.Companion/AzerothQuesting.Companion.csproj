@@ -1,24 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <ApplicationIcon>AzerothQuesting.ico</ApplicationIcon>
     <AssemblyName>AzerothQuestingCompanion</AssemblyName>
     <RootNamespace>AzerothQuesting.Companion</RootNamespace>
     <Version>0.1.9-beta.7</Version>
     <FileVersion>0.1.8.12</FileVersion>
     <AssemblyVersion>0.1.9.0</AssemblyVersion>
-    <InformationalVersion>$(Version)</InformationalVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\AzerothQuesting.ico</ApplicationIcon>
   </PropertyGroup>
-
   <ItemGroup>
-    <Content Include="AzerothQuesting.ico">
+    <None Update="Assets\AzerothQuesting.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
   </ItemGroup>
-
 </Project>
