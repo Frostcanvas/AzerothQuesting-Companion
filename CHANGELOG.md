@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.9 Beta 6 - September 10, 2026 - Available on GitHub Pre-release
+
+- **Added** a private local handoff for per-character completed-quest snapshots produced by Azeroth Questing Addon `0.3.0-beta.5` and newer. The Companion now watches the per-character `AzerothQuesting.lua` SavedVariables files in addition to the existing account-wide research SavedVariables file.
+- **Added** a local completed-quest cache and Google-Sheets-friendly `completed-quests.tsv` under the Companion data folder. The cache is grouped by the character and realm derived from the local WoW folder path and retains faction, class, level, quest ID, quest title when available, capture time, and addon version.
+- **Changed** completed-quest handoff data to remain completely separate from Pending Observations and Azeroth Questing Server synchronization. Per-character completion files are imported locally and are never placed in the server upload queue. Existing account-wide `AQO1` research synchronization is unchanged.
+- **Improved** the main dashboard by changing the former SavedVariables-file counter to **Completed Quest Toons** and adding **Open Completed Quest Data**, which opens the local Companion data folder containing the TSV/JSON cache.
+- **Improved** privacy compatibility by deriving character and realm only on the user's PC from the per-character SavedVariables path. The `AQC1` wire payload itself does not contain a character name or realm.
+- **Changed** the Companion test build to `0.1.9-beta.6` with Windows file version `0.1.8.11` because Beta 5 had already been published/consumed before this addon-to-Companion handoff was added.
+
+Beta 6 requires Azeroth Questing Addon `0.3.0-beta.5` or newer for the new completed-quest handoff. GitHub compilation/installer success does not count as Windows runtime or WoW testing. After both Betas are installed, keep the Companion running, log into a toon, run `/aq completed client` and `/reload` (or log out), then verify the Companion activity shows that toon and quest count, the **Completed Quest Toons** count increases, and `completed-quests.tsv` contains the expected per-quest rows. Confirm Pending Observations/server research counts do not increase merely because a completed-quest snapshot was imported. No successful Windows, WoW, or live server test is claimed yet.
+
 ## 0.1.9 Beta 5 - September 9, 2026 - Available on GitHub Pre-release
 
 - **Changed** the Companion application artwork to a clean **AQ** monogram that matches the dark purple-and-yellow Azeroth Questing website branding.

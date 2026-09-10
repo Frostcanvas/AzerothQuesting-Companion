@@ -19,6 +19,7 @@ internal sealed class MainForm : Form
 
     private readonly GitHubAddonClient _github = new();
     private readonly SnapshotQueue _snapshotQueue = new();
+    private readonly CompletedQuestStore _completedQuestStore = new();
     private readonly AddonService _addonService;
     private readonly CompanionUpdateService _updateService;
     private readonly CompanionSettings _settings;
@@ -363,7 +364,7 @@ internal sealed class MainForm : Form
         cards.Controls.Add(CreateCard("Installed Addon", _installedAddonValue, "AzerothQuesting"), 2, 0);
         cards.Controls.Add(CreateCard("Latest Addon", _latestAddonValue, "GitHub"), 3, 0);
         cards.Controls.Add(CreateCard("Pending Observations", _queueValue, "Local upload queue"), 0, 1);
-        cards.Controls.Add(CreateCard("SavedVariables Files", _dataValue, "Currently watched"), 1, 1);
+        cards.Controls.Add(CreateCard("Completed Quest Toons", _dataValue, "Local Companion data"), 1, 1);
         cards.Controls.Add(CreateCard("Last Data Activity", _lastDataValue, "Disk watcher"), 2, 1);
         cards.Controls.Add(CreateCard("Sync Status", _uploadValue, "Azeroth Questing Server"), 3, 1);
         return cards;
@@ -407,12 +408,15 @@ internal sealed class MainForm : Form
         addOns.Click += (_, _) => OpenAddOnsFolder();
         var data = CreateSecondaryButton("View Submitted Data");
         data.Click += (_, _) => OpenResearchData();
+        var completed = CreateSecondaryButton("Open Completed Quest Data");
+        completed.Click += (_, _) => OpenCompletedQuestData();
         var syncNow = CreateSecondaryButton("Sync Now");
         syncNow.Click += async (_, _) => await SyncNowAsync(scanFirst: true);
         buttons.Controls.Add(detect);
         buttons.Controls.Add(browse);
         buttons.Controls.Add(addOns);
         buttons.Controls.Add(data);
+        buttons.Controls.Add(completed);
         buttons.Controls.Add(syncNow);
         layout.Controls.Add(buttons, 0, 2);
 
@@ -443,7 +447,7 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             MaximumSize = new Size(850, 0),
-            Text = "Privacy: the companion reads only Azeroth Questing files and SavedVariables on disk. It does not inspect WoW process memory. When Azeroth Questing Server sync is enabled, only Azeroth Questing observation data is uploaded; disable the checkbox above to keep Pending Observations local.",
+            Text = "Privacy: the companion reads only Azeroth Questing files and SavedVariables on disk. It does not inspect WoW process memory. Anonymous research observations can be uploaded when Azeroth Questing Server sync is enabled. Per-character completed-quest snapshots are kept only in the Companion local data folder and are never added to the server upload queue.",
             Font = new Font("Segoe UI", 9, FontStyle.Regular),
             ForeColor = TextSecondary,
         }, 0, 4);
@@ -611,8 +615,9 @@ internal sealed class MainForm : Form
         _installButton.Enabled = true;
         _scanButton.Enabled = true;
 
-        _watcher = new SavedVariablesWatcher(_retailPath, _snapshotQueue);
+        _watcher = new SavedVariablesWatcher(_retailPath, _snapshotQueue, _completedQuestStore);
         _watcher.SnapshotProcessed += WatcherOnSnapshotProcessed;
+        _watcher.CompletedQuestDataProcessed += WatcherOnCompletedQuestDataProcessed;
         _watcher.WatcherError += WatcherOnError;
         _watcher.Start();
 
@@ -1042,7 +1047,15 @@ internal sealed class MainForm : Form
     private void RefreshLocalStatus()
     {
         _queueValue.Text = _snapshotQueue.Count.ToString();
-        _dataValue.Text = (_watcher?.DataFileCount ?? 0).ToString();
+        _dataValue.Text = _completedQuestStore.CharacterCount.ToString();
+    }
+
+    private void OpenCompletedQuestData()
+    {
+        AppPaths.EnsureCreated();
+        OpenPath(AppPaths.Root);
+        SetStatus($"Completed quest data is stored locally in {Path.GetFileName(_completedQuestStore.TsvPath)}.");
+        AddActivity($"Opened local completed quest data folder ({_completedQuestStore.CharacterCount} toon(s), {_completedQuestStore.QuestRecordCount} quest rows).");
     }
 
     private void OpenResearchData()

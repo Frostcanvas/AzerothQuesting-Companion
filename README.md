@@ -100,3 +100,8 @@ dotnet run --project src/AzerothQuesting.Companion/AzerothQuesting.Companion.csp
 
 - Addon: `Frostcanvas/AzerothQuesting`
 - Companion: `Frostcanvas/AzerothQuesting-Companion`
+
+
+## Completed quest handoff
+
+With Azeroth Questing Addon 0.3.0 Beta 5 or newer, the Companion can import a toon-specific completed-quest snapshot from WoW's per-character SavedVariables. The imported cache stays local to the PC and is written to `completed-quests.json` and a Google-Sheets-friendly `completed-quests.tsv` in the Companion data folder. It is separate from Pending Observations and is not uploaded to Azeroth Questing Server.

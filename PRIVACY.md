@@ -63,3 +63,8 @@ Users can remove locally queued Pending Observations by deleting files from the 
 Azeroth Questing Companion is open source under the MIT License. The source code is available at:
 
 `https://github.com/Frostcanvas/AzerothQuesting-Companion`
+
+
+## Per-character completed quest data (Beta 6)
+
+Azeroth Questing Companion can read the addon's per-character completed-quest SavedVariables handoff. Character and realm are derived locally from the World of Warcraft folder path so the addon wire payload does not need to contain those identifiers. This completed-quest cache is stored only in the Companion local data folder (`completed-quests.json` and `completed-quests.tsv`) and is not added to Pending Observations or uploaded to Azeroth Questing Server by this feature.
