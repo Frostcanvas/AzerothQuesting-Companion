@@ -1035,6 +1035,22 @@ internal sealed class MainForm : Form
         });
     }
 
+    private void WatcherOnCompletedQuestDataProcessed(object? sender, CompletedQuestDataEventArgs e)
+    {
+        SafeUi(() =>
+        {
+            _lastDataValue.Text = e.Changed
+                ? $"{DateTime.Now:g} - completed quests"
+                : $"{DateTime.Now:g} - completed unchanged";
+            RefreshLocalStatus();
+            if (e.Changed)
+            {
+                SetStatus($"Received {e.QuestCount} completed quests for {e.Character}-{e.Realm} from the addon.");
+                AddActivity($"Completed quest data received for {e.Character}-{e.Realm}: {e.QuestCount} quests (local only).");
+            }
+        });
+    }
+
     private void WatcherOnError(object? sender, string message)
     {
         SafeUi(() =>
