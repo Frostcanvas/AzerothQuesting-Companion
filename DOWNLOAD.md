@@ -6,6 +6,8 @@ https://github.com/Frostcanvas/AzerothQuesting-Companion/releases
 
 The current public release, v0.1.3, was published before the SignPath Foundation application and is unsigned. Beginning with the first approved SignPath-signed release, the release pipeline is intended to publish only installers that have passed the project's signing and Authenticode verification steps.
 
+Beta-channel Companion builds may be published as explicitly unsigned GitHub Pre-releases while trusted signing is unavailable. Beginning with Companion `0.1.9-beta.9`, addon updates can be written while World of Warcraft is running; use `/reload` or relog after the update to load the new addon files in the active game client.
+
 ## Code signing policy
 
 **Free code signing provided by SignPath.io, certificate by SignPath Foundation.**
