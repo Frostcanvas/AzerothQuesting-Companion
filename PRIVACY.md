@@ -1,6 +1,6 @@
 # Azeroth Questing Companion Privacy Policy
 
-Last updated: September 10, 2026
+Last updated: September 11, 2026
 
 Azeroth Questing Companion is designed to work with the Azeroth Questing World of Warcraft addon while minimizing the data it accesses and keeping player identity out of public research views.
 
@@ -41,7 +41,7 @@ The local completed-quest cache is separate from the public contribution. `compl
 
 The companion can synchronize Pending Observations and identity-free Quest Repository contributions to the **Azeroth Questing Server** over HTTPS when server synchronization is enabled. The dashboard provides a **Sync Quest Data to Azeroth Questing Server** checkbox and a manual **Sync Now** action. Turning synchronization off keeps newly queued data local.
 
-For Azeroth Questing v0.2.32 and newer, structured research uploads can include only addon-produced research fields: observation key, local/anonymous-peer source, quest ID, map ID, evidence type (`seen`, `available`, `offered`, `accepted`, `active`, or `turnedIn`), faction, World of Warcraft class ID/token, character level, quest completion state, observation timestamp, addon version, and companion version. The intended upload does not include character name, realm, BattleTag, guild, chat, party-member identity, GUID, screenshots, or gameplay recordings.
+For Azeroth Questing v0.2.32 and newer, structured research uploads can include only addon-produced research fields: observation key, local/anonymous-peer source, quest ID, cached quest title when available, map ID, evidence type (`seen`, `available`, `offered`, `accepted`, `active`, or `turnedIn`), faction, World of Warcraft class ID/token, character level, quest completion state, observation timestamp, addon version, and companion version. The intended upload does not include character name, realm, BattleTag, guild, chat, party-member identity, GUID, screenshots, or gameplay recordings.
 
 Quest Repository completed-quest contributions can include the completed quest IDs and cached quest titles exposed by the addon together with faction, class, level, and addon version from the `AQC1` handoff. They do not include character name, realm, account name, BattleTag, guild, chat, GUID, peer sender identity, local file path, screenshots, or gameplay recordings. The public website receives only aggregate repository results; it does not receive the raw contribution or installation identity.
 

@@ -523,7 +523,9 @@ internal sealed partial class Service01Client : IDisposable
         {
             var wire = match.Value;
             var parts = wire.Split('|');
-            if (parts.Length != 13 || parts[0] != "AQO1")
+            var isAqo1 = parts.Length == 13 && parts[0] == "AQO1";
+            var isAqo2 = parts.Length == 14 && parts[0] == "AQO2";
+            if (!isAqo1 && !isAqo2)
             {
                 continue;
             }
@@ -557,11 +559,18 @@ internal sealed partial class Service01Client : IDisposable
                 continue;
             }
 
-            observations[parts[1]] = new QuestObservationRequest
+            string? questName = null;
+            if (isAqo2 && !TryDecodeQuestName(parts[13], out questName))
+            {
+                continue;
+            }
+
+            var candidate = new QuestObservationRequest
             {
                 Key = parts[1],
                 Source = parts[2],
                 QuestId = questId,
+                QuestName = questName,
                 MapId = mapId,
                 Evidence = parts[5],
                 Faction = parts[6],
@@ -572,9 +581,44 @@ internal sealed partial class Service01Client : IDisposable
                 ObservedAt = observedTime,
                 AddonVersion = parts[12],
             };
+
+            if (!observations.TryGetValue(parts[1], out var existing)
+                || (!string.IsNullOrWhiteSpace(candidate.QuestName)
+                    && string.IsNullOrWhiteSpace(existing.QuestName)))
+            {
+                observations[parts[1]] = candidate;
+            }
         }
 
         return observations.Values.OrderBy(item => item.ObservedAt).ThenBy(item => item.Key, StringComparer.Ordinal).ToList();
+    }
+
+    private static bool TryDecodeQuestName(string value, out string? questName)
+    {
+        questName = null;
+        if (string.IsNullOrEmpty(value))
+        {
+            return true;
+        }
+        if ((value.Length % 2) != 0 || !HexStringRegex().IsMatch(value))
+        {
+            return false;
+        }
+
+        try
+        {
+            var decoded = Encoding.UTF8.GetString(Convert.FromHexString(value));
+            if (decoded.Length > 512)
+            {
+                return false;
+            }
+            questName = string.IsNullOrWhiteSpace(decoded) ? null : decoded;
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static string TrimForError(string value)
@@ -600,7 +644,7 @@ internal sealed partial class Service01Client : IDisposable
         _httpClient.Dispose();
     }
 
-    [GeneratedRegex(@"AQO1\|[A-Za-z0-9._:|\-]+", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"AQO[12]\|[A-Za-z0-9._:|\-]+", RegexOptions.CultureInvariant)]
     private static partial Regex WireRecordRegex();
 
     [GeneratedRegex(@"^[A-Z]+$", RegexOptions.CultureInvariant)]
@@ -608,6 +652,9 @@ internal sealed partial class Service01Client : IDisposable
 
     [GeneratedRegex(@"^[A-Za-z0-9._:-]+$", RegexOptions.CultureInvariant)]
     private static partial Regex ObservationKeyRegex();
+
+    [GeneratedRegex(@"^[0-9A-Fa-f]+$", RegexOptions.CultureInvariant)]
+    private static partial Regex HexStringRegex();
 
     private sealed class HeartbeatRequest
     {
@@ -679,6 +726,10 @@ internal sealed partial class Service01Client : IDisposable
 
         [JsonPropertyName("quest_id")]
         public int QuestId { get; set; }
+
+        [JsonPropertyName("quest_name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? QuestName { get; set; }
 
         [JsonPropertyName("map_id")]
         public int MapId { get; set; }

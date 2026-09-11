@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.9 Beta 8 - September 11, 2026 - Available on GitHub Pre-release
+
+- **Added** `AQO2` parsing for normal research observations that include an optional hex-encoded UTF-8 quest title. The Companion continues parsing legacy `AQO1` records and prefers the named `AQO2` copy when both carry the same observation key, preventing duplicate uploads while preserving backward compatibility.
+- **Added** optional `quest_name` transmission to the Azeroth Questing Server batch API. The field is omitted when no title is known, so legacy AQO1 observations keep their existing payload shape.
+- **Kept** research privacy unchanged apart from the public World of Warcraft quest title itself. Character name, realm, account/BattleTag, peer sender identity, local file path, and other player identity are still excluded from structured research observations.
+- **Updated** the Companion privacy description to include cached quest title as an optional structured research field.
+- **Changed** the Companion test build to `0.1.9-beta.8` with Windows file version `0.1.8.13` because Beta 7 had already been published/consumed before normal research quest-title support was requested.
+
+Beta 8 remains compatible with older addon AQO1 data. Azeroth Questing Addon `0.3.0-beta.7` or newer is required to produce named AQO2 records, and Azeroth Questing Server API `0.2.6` or newer is required to accept/store `quest_name`. The Website Quest Repository already supports displaying/searching quest names, so no Website build is required. GitHub compilation/installer success does not count as Windows, WoW, live server, or production website testing. After the compatible server is deployed, verify AQO1-only observations still synchronize, AQO2 observations upload one deduplicated row with the correct quest title, and the public Quest Repository shows that title without exposing player identity.
+
 ## 0.1.9 Beta 7 - September 10, 2026 - Available on GitHub Pre-release
 
 - **Changed** the completed-quest handoff from a local-only Companion feature into an automatic website-repository contribution when **Sync Quest Data to Azeroth Questing Server** is enabled. The existing per-character `AQC1` snapshot remains the source, so Azeroth Questing Addon `0.3.0-beta.5` does not need another addon build for this change.
