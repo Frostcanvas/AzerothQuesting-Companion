@@ -79,9 +79,10 @@ internal sealed class AddonService
             throw new InvalidOperationException("The selected folder is not a valid World of Warcraft Retail installation.");
         }
 
-        if (IsWowRunning())
+        var wowWasRunning = IsWowRunning();
+        if (wowWasRunning)
         {
-            throw new InvalidOperationException("World of Warcraft is running. Close WoW before installing or updating the addon.");
+            progress?.Report("World of Warcraft is running. Updating the addon files on disk now; use /reload or relog after the update to load the new version.");
         }
 
         AppPaths.EnsureCreated();
@@ -128,12 +129,16 @@ internal sealed class AddonService
             }
 
             var sourceAddon = Path.GetDirectoryName(toc)!;
-            if (Directory.Exists(targetAddon))
+            var stagedAddon = Path.Combine(addOnsPath, $".AzerothQuesting.update-{Guid.NewGuid():N}");
+            try
             {
-                Directory.Delete(targetAddon, recursive: true);
+                CopyDirectory(sourceAddon, stagedAddon);
+                InstallStagedDirectory(stagedAddon, targetAddon, progress);
             }
-
-            CopyDirectory(sourceAddon, targetAddon);
+            finally
+            {
+                TryDeleteDirectory(stagedAddon);
+            }
 
             var installedVersion = GetInstalledVersion(retailPath);
             if (installedVersion is null)
@@ -141,7 +146,9 @@ internal sealed class AddonService
                 throw new InvalidDataException("The addon copy completed, but AzerothQuesting.toc was not found in the installed folder.");
             }
 
-            progress?.Report($"Azeroth Questing {installedVersion} is installed.");
+            progress?.Report(wowWasRunning
+                ? $"Azeroth Questing {installedVersion} is updated on disk. Use /reload or relog in WoW to load it."
+                : $"Azeroth Questing {installedVersion} is installed.");
             return new AddonInstallResult(installedVersion, backupRoot);
         }
         finally
@@ -157,6 +164,68 @@ internal sealed class AddonService
             {
                 // Temporary cleanup can be retried by Windows later.
             }
+        }
+    }
+
+    private static void InstallStagedDirectory(
+        string stagedAddon,
+        string targetAddon,
+        IProgress<string>? progress)
+    {
+        var addOnsPath = Path.GetDirectoryName(targetAddon)
+            ?? throw new InvalidOperationException("Could not determine the WoW AddOns folder.");
+        var previousAddon = Path.Combine(addOnsPath, $".AzerothQuesting.previous-{Guid.NewGuid():N}");
+        var targetMoved = false;
+
+        try
+        {
+            if (Directory.Exists(targetAddon))
+            {
+                Directory.Move(targetAddon, previousAddon);
+                targetMoved = true;
+            }
+
+            Directory.Move(stagedAddon, targetAddon);
+            TryDeleteDirectory(previousAddon);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (!Directory.Exists(targetAddon) && targetMoved && Directory.Exists(previousAddon))
+            {
+                try
+                {
+                    Directory.Move(previousAddon, targetAddon);
+                }
+                catch (Exception restoreEx)
+                {
+                    throw new IOException(
+                        "The addon update could not swap folders and the previous addon folder could not be restored automatically. " +
+                        "Use the Companion backup before retrying.",
+                        new AggregateException(ex, restoreEx));
+                }
+            }
+
+            progress?.Report("Windows could not swap the addon folder atomically; updating the addon files in place instead...");
+            CopyDirectory(stagedAddon, targetAddon);
+            TryDeleteDirectory(previousAddon);
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+            // The normal timestamped backup is already retained. A temporary
+            // swap folder can be cleaned up by Windows or a later maintenance pass.
         }
     }
 

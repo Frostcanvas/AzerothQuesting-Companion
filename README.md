@@ -2,7 +2,7 @@
 
 Windows companion application for the **Azeroth Questing** World of Warcraft addon.
 
-## Development version - v0.1.9-beta.7
+## Development version - v0.1.9-beta.9
 
 The companion currently:
 
@@ -10,7 +10,7 @@ The companion currently:
 - Detects the installed Azeroth Questing addon and its version.
 - Checks both the companion and Azeroth Questing addon for updates from GitHub, with **Stable** and **Beta** release channels.
 - Installs, updates, or repairs Azeroth Questing from the public `Frostcanvas/AzerothQuesting` GitHub repository.
-- Refuses to change addon files while World of Warcraft is running.
+- Can install, update, or repair Azeroth Questing while World of Warcraft is running; the running game keeps its already-loaded addon code until `/reload` or the next login.
 - Backs up the existing Azeroth Questing addon before replacing it.
 - Watches only Azeroth Questing SavedVariables for changes.
 - Queues deduplicated **Pending Observations** under `%LOCALAPPDATA%\AzerothQuesting\Companion\Outbox` and synchronizes them to the Azeroth Questing Server when synchronization is enabled.
@@ -52,7 +52,7 @@ The **Check for Updates** action checks both repositories:
 
 For companion updates, the app downloads the published setup package into `%LOCALAPPDATA%\AzerothQuesting\Companion\Updates`, verifies the GitHub SHA-256 digest when GitHub supplies one, starts the Windows installer with elevation, closes the old client, updates the installed files, and restarts the client.
 
-Addon updates are reported in the same check. Stable mode ignores GitHub prereleases; Beta mode considers both stable releases and GitHub prereleases and selects the newest compatible release. Use **Update Addon** to install the selected channel package. Addon updates are not applied while World of Warcraft is running.
+Addon updates are reported in the same check. Stable mode ignores GitHub prereleases; Beta mode considers both stable releases and GitHub prereleases and selects the newest compatible release. Use **Update Addon** to install the selected channel package. The Companion may update addon files while World of Warcraft is running. WoW continues using the addon code already loaded in memory until the player uses `/reload` or logs out and back in.
 
 ## Code signing policy
 

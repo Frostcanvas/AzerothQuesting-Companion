@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.9 Beta 9 - September 11, 2026 - Available on GitHub Pre-release
+
+- **Fixed** the Companion refusing every addon install/update whenever a World of Warcraft process was running. Azeroth Questing can now be installed, updated, or repaired on disk while Retail WoW remains open, matching normal addon-manager behavior more closely.
+- **Changed** live-game update behavior so the running WoW session keeps using the addon code it already loaded. After the Companion finishes writing the new package, the player can use `/reload` when convenient or relog to activate the updated addon; the Companion no longer forces the entire game to close first.
+- **Improved** addon replacement safety by fully staging the downloaded addon beside the live AddOns folder before activation, retaining the existing timestamped backup, attempting a directory swap first, and falling back to an in-place file copy if Windows prevents the atomic folder rename. The downloaded package is still validated by locating `AzerothQuesting.toc` before the installed folder is changed.
+- **Updated** the Companion development documentation to describe live-WoW addon updates and the required `/reload`/relog activation step.
+- **Changed** the Companion test build to `0.1.9-beta.9` with Windows file version `0.1.8.14` because Beta 8 had already been published and consumed before this updater behavior was requested.
+
+This change affects the Companion updater only; no new Azeroth Questing addon, Website, or Azeroth Questing Server build is required. GitHub compilation/installer success does not count as Windows runtime or in-game testing. Test Beta 9 on Windows with Retail WoW open: update or repair Azeroth Questing, confirm the on-disk TOC changes without the close-WoW error, confirm the already-running UI does not pretend it hot-loaded the new code, then use `/reload` and verify the new addon version is active. Repeat once with WoW closed and verify backups and normal installation still work. If trusted signing remains unavailable, this Beta may be published as an explicitly unsigned testing build; Stable still requires trusted signing.
+
 ## 0.1.9 Beta 8 - September 11, 2026 - Available on GitHub Pre-release
 
 - **Added** `AQO2` parsing for normal research observations that include an optional hex-encoded UTF-8 quest title. The Companion continues parsing legacy `AQO1` records and prefers the named `AQO2` copy when both carry the same observation key, preventing duplicate uploads while preserving backward compatibility.
