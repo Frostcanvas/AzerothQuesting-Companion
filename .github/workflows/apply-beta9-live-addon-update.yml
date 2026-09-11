@@ -1,0 +1,41 @@
+name: Apply Companion Beta 9 live addon update
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-beta9-live-addon-update.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply Beta 9 changes
+        run: python .github/apply_beta9_live_addon_update.py
+
+      - name: Validate patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          grep -n '<Version>0.1.9-beta.9</Version>' src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj
+          grep -n -m1 '^## 0.1.9 Beta 9 ' CHANGELOG.md
+
+      - name: Commit and push Beta 9
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Release companion v0.1.9-beta.9 live addon update'
+          git push origin HEAD:main
