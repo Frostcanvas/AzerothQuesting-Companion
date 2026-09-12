@@ -85,3 +85,7 @@ dotnet run --project src/AzerothQuesting.Companion/AzerothQuesting.Companion.csp
 - Addon: `Frostcanvas/AzerothQuesting`
 - Companion: `Frostcanvas/AzerothQuesting-Companion`
 - Website: `Frostcanvas/AzerothQuestingwebsite`
+
+## AQM2 map identity evidence
+
+Companion 0.1.9-beta.12 can prefer the add-on AQM2 record over its same-key AQM1 fallback and upload privacy-safe Blizzard map evidence such as parent map, map-art ID, scenario/step, difficulty, coordinates, and previous UiMapID. Player identity and local filesystem paths are not added to the structured map payload. AQM2 upload requires Azeroth Questing Server 0.2.12 / schema 5 or newer.

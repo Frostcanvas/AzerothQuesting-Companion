@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -648,7 +649,9 @@ internal sealed partial class Service01Client : IDisposable
         foreach (Match match in MapWireRecordRegex().Matches(snapshot))
         {
             var parts = match.Value.Split('|');
-            if (parts.Length != 17 || parts[0] != "AQM1")
+            var isAqm1 = parts.Length == 17 && parts[0] == "AQM1";
+            var isAqm2 = parts.Length == 25 && parts[0] == "AQM2";
+            if (!isAqm1 && !isAqm2)
             {
                 continue;
             }
@@ -690,17 +693,53 @@ internal sealed partial class Service01Client : IDisposable
                 continue;
             }
 
-            observations[parts[1]] = new MapObservationRequest
+            string? parentMapName = null;
+            string? scenarioName = null;
+            string? scenarioStep = null;
+            string? difficultyName = null;
+            var mapArtId = 0;
+            var previousMapId = 0;
+            double? positionX = null;
+            double? positionY = null;
+
+            if (isAqm2)
+            {
+                if (!TryDecodeQuestName(parts[17], out parentMapName)
+                    || !int.TryParse(parts[18], out mapArtId) || mapArtId < 0
+                    || !TryDecodeQuestName(parts[19], out scenarioName)
+                    || !TryDecodeQuestName(parts[20], out scenarioStep)
+                    || !TryDecodeQuestName(parts[21], out difficultyName)
+                    || !int.TryParse(parts[24], out previousMapId) || previousMapId < 0)
+                {
+                    continue;
+                }
+
+                if (!TryParseOptionalCoordinate(parts[22], out positionX)
+                    || !TryParseOptionalCoordinate(parts[23], out positionY))
+                {
+                    continue;
+                }
+            }
+
+            var candidate = new MapObservationRequest
             {
                 Key = parts[1],
                 MapId = mapId,
                 MapName = mapName,
                 ParentMapId = parentMapId,
+                ParentMapName = parentMapName,
                 MapType = mapType,
+                MapArtId = mapArtId,
                 InstanceName = instanceName,
                 InstanceType = parts[7],
                 DifficultyId = difficultyId,
+                DifficultyName = difficultyName,
                 InstanceId = instanceId,
+                ScenarioName = scenarioName,
+                ScenarioStep = scenarioStep,
+                PositionX = positionX,
+                PositionY = positionY,
+                PreviousMapId = previousMapId,
                 Faction = parts[10],
                 ClassId = classId,
                 ClassFile = parts[12],
@@ -709,12 +748,35 @@ internal sealed partial class Service01Client : IDisposable
                 ObservedAt = observedTime,
                 AddonVersion = parts[16],
             };
+
+            if (!observations.ContainsKey(parts[1]) || isAqm2)
+            {
+                observations[parts[1]] = candidate;
+            }
         }
 
         return observations.Values
             .OrderBy(item => item.ObservedAt)
             .ThenBy(item => item.Key, StringComparer.Ordinal)
             .ToList();
+    }
+
+    private static bool TryParseOptionalCoordinate(string value, out double? coordinate)
+    {
+        coordinate = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            || parsed < 0.0 || parsed > 1.0)
+        {
+            return false;
+        }
+
+        coordinate = parsed;
+        return true;
     }
 
     private static bool TryDecodeQuestName(string value, out string? questName)
@@ -771,7 +833,7 @@ internal sealed partial class Service01Client : IDisposable
     [GeneratedRegex(@"AQO[12]\|[A-Za-z0-9._:|\-]+", RegexOptions.CultureInvariant)]
     private static partial Regex WireRecordRegex();
 
-    [GeneratedRegex(@"AQM1\|[A-Za-z0-9._:|\-]+", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"AQM[12]\|[A-Za-z0-9._:|\-]+", RegexOptions.CultureInvariant)]
     private static partial Regex MapWireRecordRegex();
 
     [GeneratedRegex(@"^[A-Za-z_]+$", RegexOptions.CultureInvariant)]
@@ -916,8 +978,15 @@ internal sealed partial class Service01Client : IDisposable
         [JsonPropertyName("parent_map_id")]
         public int ParentMapId { get; set; }
 
+        [JsonPropertyName("parent_map_name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? ParentMapName { get; set; }
+
         [JsonPropertyName("map_type")]
         public int MapType { get; set; }
+
+        [JsonPropertyName("map_art_id")]
+        public int MapArtId { get; set; }
 
         [JsonPropertyName("instance_name")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -929,8 +998,31 @@ internal sealed partial class Service01Client : IDisposable
         [JsonPropertyName("difficulty_id")]
         public int DifficultyId { get; set; }
 
+        [JsonPropertyName("difficulty_name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DifficultyName { get; set; }
+
         [JsonPropertyName("instance_id")]
         public int InstanceId { get; set; }
+
+        [JsonPropertyName("scenario_name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? ScenarioName { get; set; }
+
+        [JsonPropertyName("scenario_step")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? ScenarioStep { get; set; }
+
+        [JsonPropertyName("position_x")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? PositionX { get; set; }
+
+        [JsonPropertyName("position_y")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? PositionY { get; set; }
+
+        [JsonPropertyName("previous_map_id")]
+        public int PreviousMapId { get; set; }
 
         [JsonPropertyName("faction")]
         public string Faction { get; set; } = string.Empty;

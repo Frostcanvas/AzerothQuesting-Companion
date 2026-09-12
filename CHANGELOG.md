@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9 Beta 12 - September 12, 2026 - Available on GitHub Pre-release
+
+- **Added** `AQM2` parsing for the richer map-identity observations produced by Addon `0.3.0-beta.19`. The Companion continues parsing legacy `AQM1` records and prefers the `AQM2` copy when both share the same observation key, preserving backward compatibility without duplicate uploads.
+- **Added** upload support for parent-map name, map-art ID, Blizzard scenario name and step, difficulty name, map coordinates, and previous UiMapID. These are World of Warcraft map/context fields and do not add character name, realm, BattleTag, Windows username, local path, or peer sender identity to the server payload.
+- **Kept** the existing retryable Outbox and `/api/v1/maps/batch` synchronization flow. Rich map evidence is sent only when the compatible Azeroth Questing Server accepts the new fields.
+- **Changed** the Companion test build to `0.1.9-beta.12` with Windows file version `0.1.8.17` because Beta 11 was already published and consumed before richer map-identity evidence was approved.
+
+Beta 12 requires Azeroth Questing Addon `0.3.0-beta.19` or newer to produce `AQM2` records and Azeroth Questing Server `0.2.12` / schema 5 or newer to store the added fields. Legacy `AQM1` remains readable. GitHub compilation/installer success does not count as Windows runtime, WoW, or live-server validation. Verify an AQM2 snapshot is queued after `/reload`, uploads once, and appears on the LAN Research Map IDs tab with the expected evidence. If trusted signing remains unavailable, this Beta may be published as an explicitly unsigned testing build; Stable still requires trusted signing.
 ## 0.1.9 Beta 11 - September 12, 2026 - Available on GitHub Pre-release
 
 - **Added** parsing and upload support for the addon's new identity-free `AQM1` map observations. The Companion now recognizes UiMapID research alongside existing `AQO1`/`AQO2` quest observations and sends map batches to the Azeroth Questing Server without copying character name, realm, BattleTag, local file path, or peer identity.
