@@ -1,0 +1,1 @@
+Temporary updater-publication trigger for Companion 0.1.9-beta.11. Remove after the GitHub Pre-release is published.
