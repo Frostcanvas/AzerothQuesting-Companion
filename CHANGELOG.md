@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9 Beta 10 - September 12, 2026 - Available on GitHub Pre-release
+
+- **Changed** successful addon install/update/repair completion to stay inside the Companion dashboard instead of opening a modal Windows information message that requires clicking **OK**.
+- **Kept** successful-install feedback in the existing Companion status bar and activity history, so the installed addon version remains visible without interrupting the player workflow. Error and required-action dialogs are unchanged.
+- **Changed** the Companion test build to `0.1.9-beta.10` with Windows file version `0.1.8.15` because Beta 9 had already been published and consumed before this UI change was requested.
+
+This change affects the Companion UI only; no new Azeroth Questing addon, Website, or Azeroth Questing Server build is required. GitHub compilation/installer success does not count as Windows runtime testing. On Windows, install/update or repair the addon and verify the operation completes without the success popup shown in Beta 9, while the dashboard/status/activity still report the successful addon version. Error dialogs should still appear when an install actually fails. If trusted signing remains unavailable, this Beta may be published as an explicitly unsigned testing build; Stable still requires trusted signing.
+
 ## 0.1.9 Beta 9 - September 11, 2026 - Available on GitHub Pre-release
 
 - **Fixed** the Companion refusing every addon install/update whenever a World of Warcraft process was running. Azeroth Questing can now be installed, updated, or repaired on disk while Retail WoW remains open, matching normal addon-manager behavior more closely.

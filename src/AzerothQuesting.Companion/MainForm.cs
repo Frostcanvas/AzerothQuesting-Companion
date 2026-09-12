@@ -872,13 +872,6 @@ internal sealed class MainForm : Form
             await RefreshRemoteAddonStatusAsync();
             RefreshLocalStatus();
 
-            MessageBox.Show(
-                this,
-                $"Azeroth Questing {result.Version} is installed.\n\nBackup: {result.BackupDirectory}",
-                "Azeroth Questing Companion",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-
             SetStatus($"Azeroth Questing {result.Version} installed successfully.");
             AddActivity($"Addon {result.Version} installed or repaired.");
         }
