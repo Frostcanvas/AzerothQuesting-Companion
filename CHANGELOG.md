@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.9 Beta 11 - September 12, 2026 - Available on GitHub Pre-release
+
+- **Added** parsing and upload support for the addon's new identity-free `AQM1` map observations. The Companion now recognizes UiMapID research alongside existing `AQO1`/`AQO2` quest observations and sends map batches to the Azeroth Questing Server without copying character name, realm, BattleTag, local file path, or peer identity.
+- **Added** structured map context fields needed to distinguish phased or scenario copies of places such as Battle for Darkshore and Battle for Stromgarde: UiMapID, map name, parent UiMapID, UI map type, instance name/type, difficulty ID, instance ID, faction, class, level, optional phase label, observation time, and addon version.
+- **Kept** existing quest observation and completed-quest synchronization unchanged. Map observations share the normal retryable Outbox and are counted as research observations in sync status.
+- **Changed** the Companion test build to `0.1.9-beta.11` with Windows file version `0.1.8.16` because Beta 10 had already been published and consumed before map-ID research support was requested.
+
+Beta 11 requires Azeroth Questing Addon `0.3.0-beta.18` or newer to produce `AQM1` records and Azeroth Questing Server API `0.2.9` or newer to accept map batches. GitHub compilation/installer success does not count as Windows runtime, WoW, or live-server validation. After the compatible server is deployed, verify that moving between multiple UiMapIDs causes map observations to synchronize while existing quest observations continue to upload normally. If trusted signing remains unavailable, this Beta may be published as an explicitly unsigned testing build; Stable still requires trusted signing.
+
 ## 0.1.9 Beta 10 - September 12, 2026 - Available on GitHub Pre-release
 
 - **Changed** successful addon install/update/repair completion to stay inside the Companion dashboard instead of opening a modal Windows information message that requires clicking **OK**.

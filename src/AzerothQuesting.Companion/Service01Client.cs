@@ -67,15 +67,29 @@ internal sealed partial class Service01Client : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
             var text = await File.ReadAllTextAsync(path, cancellationToken);
-            var observations = ExtractWireObservations(text);
+            var questObservations = ExtractWireObservations(text);
+            var mapObservations = ExtractMapWireObservations(text);
 
-            if (observations.Count > 0)
+            if (questObservations.Count > 0 || mapObservations.Count > 0)
             {
-                for (var offset = 0; offset < observations.Count; offset += BatchSize)
+                for (var offset = 0; offset < questObservations.Count; offset += BatchSize)
                 {
-                    var batch = observations.Skip(offset).Take(BatchSize).ToArray();
+                    var batch = questObservations.Skip(offset).Take(BatchSize).ToArray();
                     var addonVersion = batch.LastOrDefault()?.AddonVersion;
                     var response = await SendBatchWithRegistrationRetryAsync(
+                        batch,
+                        addonVersion,
+                        companionVersion,
+                        cancellationToken);
+                    uploadedObservations += response.Accepted;
+                    duplicates += response.Duplicates;
+                }
+
+                for (var offset = 0; offset < mapObservations.Count; offset += BatchSize)
+                {
+                    var batch = mapObservations.Skip(offset).Take(BatchSize).ToArray();
+                    var addonVersion = batch.LastOrDefault()?.AddonVersion;
+                    var response = await SendMapBatchWithRegistrationRetryAsync(
                         batch,
                         addonVersion,
                         companionVersion,
@@ -86,9 +100,9 @@ internal sealed partial class Service01Client : IDisposable
             }
             else
             {
-                // v0.2.31 and older snapshots do not contain AQO1 records. Keep a
-                // raw, SHA-256 checked compatibility path so those already-queued
-                // observations are not discarded during the sync upgrade.
+                // Older snapshots may not contain structured AQO/AQM records. Keep a
+                // raw, SHA-256 checked compatibility path so already-queued data is
+                // not discarded during research protocol upgrades.
                 await SendRawSnapshotWithRegistrationRetryAsync(
                     text,
                     companionVersion,
@@ -409,6 +423,40 @@ internal sealed partial class Service01Client : IDisposable
         return await ReadBatchResponseAsync(response, cancellationToken);
     }
 
+    private async Task<BatchResponse> SendMapBatchWithRegistrationRetryAsync(
+        IReadOnlyCollection<MapObservationRequest> observations,
+        string? addonVersion,
+        string companionVersion,
+        CancellationToken cancellationToken)
+    {
+        var request = new MapBatchRequest
+        {
+            AddonVersion = addonVersion,
+            CompanionVersion = companionVersion,
+            Observations = observations.ToArray(),
+        };
+
+        using var response = await PostJsonAsync(
+            "/api/v1/maps/batch",
+            request,
+            _settings.InstallationToken,
+            cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            ClearRegistration();
+            await EnsureRegisteredAsync(companionVersion, cancellationToken);
+            using var retry = await PostJsonAsync(
+                "/api/v1/maps/batch",
+                request,
+                _settings.InstallationToken,
+                cancellationToken);
+            return await ReadBatchResponseAsync(retry, cancellationToken);
+        }
+
+        return await ReadBatchResponseAsync(response, cancellationToken);
+    }
+
     private async Task<BatchResponse> ReadBatchResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -593,6 +641,82 @@ internal sealed partial class Service01Client : IDisposable
         return observations.Values.OrderBy(item => item.ObservedAt).ThenBy(item => item.Key, StringComparer.Ordinal).ToList();
     }
 
+    private static List<MapObservationRequest> ExtractMapWireObservations(string snapshot)
+    {
+        var observations = new Dictionary<string, MapObservationRequest>(StringComparer.Ordinal);
+
+        foreach (Match match in MapWireRecordRegex().Matches(snapshot))
+        {
+            var parts = match.Value.Split('|');
+            if (parts.Length != 17 || parts[0] != "AQM1")
+            {
+                continue;
+            }
+
+            if (!int.TryParse(parts[2], out var mapId) || mapId <= 0
+                || !int.TryParse(parts[4], out var parentMapId) || parentMapId < 0
+                || !int.TryParse(parts[5], out var mapType) || mapType < 0 || mapType > 255
+                || !int.TryParse(parts[8], out var difficultyId) || difficultyId < 0
+                || !int.TryParse(parts[9], out var instanceId) || instanceId < 0
+                || !int.TryParse(parts[11], out var classId) || classId < 0 || classId > 30
+                || !int.TryParse(parts[13], out var level) || level < 0 || level > 255
+                || !long.TryParse(parts[15], out var observedAt) || observedAt <= 0)
+            {
+                continue;
+            }
+
+            if (parts[10] is not ("Alliance" or "Horde" or "Neutral")
+                || !ClassFileRegex().IsMatch(parts[12])
+                || !ObservationKeyRegex().IsMatch(parts[1])
+                || !InstanceTypeRegex().IsMatch(parts[7]))
+            {
+                continue;
+            }
+
+            DateTimeOffset observedTime;
+            try
+            {
+                observedTime = DateTimeOffset.FromUnixTimeSeconds(observedAt);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                continue;
+            }
+
+            if (!TryDecodeQuestName(parts[3], out var mapName)
+                || !TryDecodeQuestName(parts[6], out var instanceName)
+                || !TryDecodeQuestName(parts[14], out var phase))
+            {
+                continue;
+            }
+
+            observations[parts[1]] = new MapObservationRequest
+            {
+                Key = parts[1],
+                MapId = mapId,
+                MapName = mapName,
+                ParentMapId = parentMapId,
+                MapType = mapType,
+                InstanceName = instanceName,
+                InstanceType = parts[7],
+                DifficultyId = difficultyId,
+                InstanceId = instanceId,
+                Faction = parts[10],
+                ClassId = classId,
+                ClassFile = parts[12],
+                Level = level,
+                Phase = phase,
+                ObservedAt = observedTime,
+                AddonVersion = parts[16],
+            };
+        }
+
+        return observations.Values
+            .OrderBy(item => item.ObservedAt)
+            .ThenBy(item => item.Key, StringComparer.Ordinal)
+            .ToList();
+    }
+
     private static bool TryDecodeQuestName(string value, out string? questName)
     {
         questName = null;
@@ -646,6 +770,12 @@ internal sealed partial class Service01Client : IDisposable
 
     [GeneratedRegex(@"AQO[12]\|[A-Za-z0-9._:|\-]+", RegexOptions.CultureInvariant)]
     private static partial Regex WireRecordRegex();
+
+    [GeneratedRegex(@"AQM1\|[A-Za-z0-9._:|\-]+", RegexOptions.CultureInvariant)]
+    private static partial Regex MapWireRecordRegex();
+
+    [GeneratedRegex(@"^[A-Za-z_]+$", RegexOptions.CultureInvariant)]
+    private static partial Regex InstanceTypeRegex();
 
     [GeneratedRegex(@"^[A-Z]+$", RegexOptions.CultureInvariant)]
     private static partial Regex ClassFileRegex();
@@ -751,6 +881,72 @@ internal sealed partial class Service01Client : IDisposable
 
         [JsonPropertyName("completed")]
         public bool Completed { get; set; }
+
+        [JsonPropertyName("observed_at")]
+        public DateTimeOffset ObservedAt { get; set; }
+
+        [JsonIgnore]
+        public string AddonVersion { get; set; } = string.Empty;
+    }
+
+    private sealed class MapBatchRequest
+    {
+        [JsonPropertyName("addon_version")]
+        public string? AddonVersion { get; set; }
+
+        [JsonPropertyName("companion_version")]
+        public string? CompanionVersion { get; set; }
+
+        [JsonPropertyName("observations")]
+        public MapObservationRequest[] Observations { get; set; } = [];
+    }
+
+    private sealed class MapObservationRequest
+    {
+        [JsonPropertyName("key")]
+        public string Key { get; set; } = string.Empty;
+
+        [JsonPropertyName("map_id")]
+        public int MapId { get; set; }
+
+        [JsonPropertyName("map_name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? MapName { get; set; }
+
+        [JsonPropertyName("parent_map_id")]
+        public int ParentMapId { get; set; }
+
+        [JsonPropertyName("map_type")]
+        public int MapType { get; set; }
+
+        [JsonPropertyName("instance_name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? InstanceName { get; set; }
+
+        [JsonPropertyName("instance_type")]
+        public string InstanceType { get; set; } = "none";
+
+        [JsonPropertyName("difficulty_id")]
+        public int DifficultyId { get; set; }
+
+        [JsonPropertyName("instance_id")]
+        public int InstanceId { get; set; }
+
+        [JsonPropertyName("faction")]
+        public string Faction { get; set; } = string.Empty;
+
+        [JsonPropertyName("class_id")]
+        public int ClassId { get; set; }
+
+        [JsonPropertyName("class_file")]
+        public string ClassFile { get; set; } = string.Empty;
+
+        [JsonPropertyName("level")]
+        public int Level { get; set; }
+
+        [JsonPropertyName("phase")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Phase { get; set; }
 
         [JsonPropertyName("observed_at")]
         public DateTimeOffset ObservedAt { get; set; }
