@@ -1,0 +1,1 @@
+Trigger GitHub Actions packaging and prerelease publication for Azeroth Questing Companion 0.1.9-beta.12.
