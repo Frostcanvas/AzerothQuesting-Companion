@@ -1,0 +1,297 @@
+name: Prepare Companion map identity Beta 12
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Apply AQM2 parsing and version changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > /tmp/map-method.txt <<'CS'
+              private static List<MapObservationRequest> ExtractMapWireObservations(string snapshot)
+              {
+                  var observations = new Dictionary<string, MapObservationRequest>(StringComparer.Ordinal);
+
+                  foreach (Match match in MapWireRecordRegex().Matches(snapshot))
+                  {
+                      var parts = match.Value.Split('|');
+                      var isAqm1 = parts.Length == 17 && parts[0] == "AQM1";
+                      var isAqm2 = parts.Length == 25 && parts[0] == "AQM2";
+                      if (!isAqm1 && !isAqm2)
+                      {
+                          continue;
+                      }
+
+                      if (!int.TryParse(parts[2], out var mapId) || mapId <= 0
+                          || !int.TryParse(parts[4], out var parentMapId) || parentMapId < 0
+                          || !int.TryParse(parts[5], out var mapType) || mapType < 0 || mapType > 255
+                          || !int.TryParse(parts[8], out var difficultyId) || difficultyId < 0
+                          || !int.TryParse(parts[9], out var instanceId) || instanceId < 0
+                          || !int.TryParse(parts[11], out var classId) || classId < 0 || classId > 30
+                          || !int.TryParse(parts[13], out var level) || level < 0 || level > 255
+                          || !long.TryParse(parts[15], out var observedAt) || observedAt <= 0)
+                      {
+                          continue;
+                      }
+
+                      if (parts[10] is not ("Alliance" or "Horde" or "Neutral")
+                          || !ClassFileRegex().IsMatch(parts[12])
+                          || !ObservationKeyRegex().IsMatch(parts[1])
+                          || !InstanceTypeRegex().IsMatch(parts[7]))
+                      {
+                          continue;
+                      }
+
+                      DateTimeOffset observedTime;
+                      try
+                      {
+                          observedTime = DateTimeOffset.FromUnixTimeSeconds(observedAt);
+                      }
+                      catch (ArgumentOutOfRangeException)
+                      {
+                          continue;
+                      }
+
+                      if (!TryDecodeQuestName(parts[3], out var mapName)
+                          || !TryDecodeQuestName(parts[6], out var instanceName)
+                          || !TryDecodeQuestName(parts[14], out var phase))
+                      {
+                          continue;
+                      }
+
+                      string? parentMapName = null;
+                      string? scenarioName = null;
+                      string? scenarioStep = null;
+                      string? difficultyName = null;
+                      var mapArtId = 0;
+                      var previousMapId = 0;
+                      double? positionX = null;
+                      double? positionY = null;
+
+                      if (isAqm2)
+                      {
+                          if (!TryDecodeQuestName(parts[17], out parentMapName)
+                              || !int.TryParse(parts[18], out mapArtId) || mapArtId < 0
+                              || !TryDecodeQuestName(parts[19], out scenarioName)
+                              || !TryDecodeQuestName(parts[20], out scenarioStep)
+                              || !TryDecodeQuestName(parts[21], out difficultyName)
+                              || !int.TryParse(parts[24], out previousMapId) || previousMapId < 0)
+                          {
+                              continue;
+                          }
+
+                          if (!TryParseOptionalCoordinate(parts[22], out positionX)
+                              || !TryParseOptionalCoordinate(parts[23], out positionY))
+                          {
+                              continue;
+                          }
+                      }
+
+                      var candidate = new MapObservationRequest
+                      {
+                          Key = parts[1],
+                          MapId = mapId,
+                          MapName = mapName,
+                          ParentMapId = parentMapId,
+                          ParentMapName = parentMapName,
+                          MapType = mapType,
+                          MapArtId = mapArtId,
+                          InstanceName = instanceName,
+                          InstanceType = parts[7],
+                          DifficultyId = difficultyId,
+                          DifficultyName = difficultyName,
+                          InstanceId = instanceId,
+                          ScenarioName = scenarioName,
+                          ScenarioStep = scenarioStep,
+                          PositionX = positionX,
+                          PositionY = positionY,
+                          PreviousMapId = previousMapId,
+                          Faction = parts[10],
+                          ClassId = classId,
+                          ClassFile = parts[12],
+                          Level = level,
+                          Phase = phase,
+                          ObservedAt = observedTime,
+                          AddonVersion = parts[16],
+                      };
+
+                      if (!observations.ContainsKey(parts[1]) || isAqm2)
+                      {
+                          observations[parts[1]] = candidate;
+                      }
+                  }
+
+                  return observations.Values
+                      .OrderBy(item => item.ObservedAt)
+                      .ThenBy(item => item.Key, StringComparer.Ordinal)
+                      .ToList();
+              }
+
+              private static bool TryParseOptionalCoordinate(string value, out double? coordinate)
+              {
+                  coordinate = null;
+                  if (string.IsNullOrWhiteSpace(value))
+                  {
+                      return true;
+                  }
+
+                  if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+                      || parsed < 0.0 || parsed > 1.0)
+                  {
+                      return false;
+                  }
+
+                  coordinate = parsed;
+                  return true;
+              }
+          CS
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('src/AzerothQuesting.Companion/Service01Client.cs')
+          text = path.read_text(encoding='utf-8')
+          if 'using System.Globalization;' not in text:
+              text = text.replace('using System.Net;\n', 'using System.Globalization;\nusing System.Net;\n', 1)
+
+          start = text.index('    private static List<MapObservationRequest> ExtractMapWireObservations')
+          end = text.index('    private static bool TryDecodeQuestName', start)
+          method = Path('/tmp/map-method.txt').read_text(encoding='utf-8')
+          text = text[:start] + method + '\n' + text[end:]
+
+          text = text.replace(
+              '[GeneratedRegex(@"AQM1\\|[A-Za-z0-9._:|\\-]+", RegexOptions.CultureInvariant)]',
+              '[GeneratedRegex(@"AQM[12]\\|[A-Za-z0-9._:|\\-]+", RegexOptions.CultureInvariant)]',
+              1,
+          )
+
+          old_fields = '''        [JsonPropertyName("parent_map_id")]
+                  public int ParentMapId { get; set; }
+
+                  [JsonPropertyName("map_type")]
+                  public int MapType { get; set; }
+
+                  [JsonPropertyName("instance_name")]'''
+          new_fields = '''        [JsonPropertyName("parent_map_id")]
+                  public int ParentMapId { get; set; }
+
+                  [JsonPropertyName("parent_map_name")]
+                  [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+                  public string? ParentMapName { get; set; }
+
+                  [JsonPropertyName("map_type")]
+                  public int MapType { get; set; }
+
+                  [JsonPropertyName("map_art_id")]
+                  public int MapArtId { get; set; }
+
+                  [JsonPropertyName("instance_name")]'''
+          assert old_fields in text, 'map parent/model anchor not found'
+          text = text.replace(old_fields, new_fields, 1)
+
+          old_difficulty = '''        [JsonPropertyName("difficulty_id")]
+                  public int DifficultyId { get; set; }
+
+                  [JsonPropertyName("instance_id")]
+                  public int InstanceId { get; set; }
+
+                  [JsonPropertyName("faction")]'''
+          new_difficulty = '''        [JsonPropertyName("difficulty_id")]
+                  public int DifficultyId { get; set; }
+
+                  [JsonPropertyName("difficulty_name")]
+                  [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+                  public string? DifficultyName { get; set; }
+
+                  [JsonPropertyName("instance_id")]
+                  public int InstanceId { get; set; }
+
+                  [JsonPropertyName("scenario_name")]
+                  [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+                  public string? ScenarioName { get; set; }
+
+                  [JsonPropertyName("scenario_step")]
+                  [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+                  public string? ScenarioStep { get; set; }
+
+                  [JsonPropertyName("position_x")]
+                  [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+                  public double? PositionX { get; set; }
+
+                  [JsonPropertyName("position_y")]
+                  [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+                  public double? PositionY { get; set; }
+
+                  [JsonPropertyName("previous_map_id")]
+                  public int PreviousMapId { get; set; }
+
+                  [JsonPropertyName("faction")]'''
+          assert old_difficulty in text, 'map difficulty/model anchor not found'
+          text = text.replace(old_difficulty, new_difficulty, 1)
+          path.write_text(text, encoding='utf-8')
+
+          project = Path('src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj')
+          text = project.read_text(encoding='utf-8')
+          assert '<Version>0.1.9-beta.11</Version>' in text
+          assert '<FileVersion>0.1.8.16</FileVersion>' in text
+          text = text.replace('<Version>0.1.9-beta.11</Version>', '<Version>0.1.9-beta.12</Version>', 1)
+          text = text.replace('<FileVersion>0.1.8.16</FileVersion>', '<FileVersion>0.1.8.17</FileVersion>', 1)
+          project.write_text(text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          marker = '# Changelog\n\n'
+          assert text.startswith(marker)
+          entry = '\n'.join([
+              '## 0.1.9 Beta 12 - September 12, 2026 - Available on GitHub Pre-release',
+              '',
+              '- **Added** `AQM2` parsing for the richer map-identity observations produced by Addon `0.3.0-beta.19`. The Companion continues parsing legacy `AQM1` records and prefers the `AQM2` copy when both share the same observation key, preserving backward compatibility without duplicate uploads.',
+              '- **Added** upload support for parent-map name, map-art ID, Blizzard scenario name and step, difficulty name, map coordinates, and previous UiMapID. These are World of Warcraft map/context fields and do not add character name, realm, BattleTag, Windows username, local path, or peer sender identity to the server payload.',
+              '- **Kept** the existing retryable Outbox and `/api/v1/maps/batch` synchronization flow. Rich map evidence is sent only when the compatible Azeroth Questing Server accepts the new fields.',
+              '- **Changed** the Companion test build to `0.1.9-beta.12` with Windows file version `0.1.8.17` because Beta 11 was already published and consumed before richer map-identity evidence was approved.',
+              '',
+              'Beta 12 requires Azeroth Questing Addon `0.3.0-beta.19` or newer to produce `AQM2` records and Azeroth Questing Server `0.2.12` / schema 5 or newer to store the added fields. Legacy `AQM1` remains readable. GitHub compilation/installer success does not count as Windows runtime, WoW, or live-server validation. Verify an AQM2 snapshot is queued after `/reload`, uploads once, and appears on the LAN Research Map IDs tab with the expected evidence. If trusted signing remains unavailable, this Beta may be published as an explicitly unsigned testing build; Stable still requires trusted signing.',
+              '',
+          ])
+          assert '## 0.1.9 Beta 12 -' not in text
+          changelog.write_text(marker + entry + text[len(marker):], encoding='utf-8')
+
+          readme = Path('README.md')
+          readme_text = readme.read_text(encoding='utf-8')
+          note = '\n## AQM2 map identity evidence\n\nCompanion 0.1.9-beta.12 can prefer the add-on AQM2 record over its same-key AQM1 fallback and upload privacy-safe Blizzard map evidence such as parent map, map-art ID, scenario/step, difficulty, coordinates, and previous UiMapID. Player identity and local filesystem paths are not added to the structured map payload. AQM2 upload requires Azeroth Questing Server 0.2.12 / schema 5 or newer.\n'
+          if '## AQM2 map identity evidence' not in readme_text:
+              readme.write_text(readme_text.rstrip() + '\n' + note, encoding='utf-8')
+          PY
+
+          dotnet restore src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj
+          dotnet build src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj -c Release --no-restore
+          git diff --check
+
+      - name: Commit prepared Beta 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/prepare-map-identity-beta12.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Prepare companion v0.1.9-beta.12 map identity research"
+          git push
