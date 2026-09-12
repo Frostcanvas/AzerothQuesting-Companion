@@ -30,8 +30,8 @@ jobs:
 
       - name: Validate build
         run: |
-          dotnet restore src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj
-          dotnet build src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj -c Release --no-restore
+          dotnet restore src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj -p:EnableWindowsTargeting=true
+          dotnet build src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj -c Release --no-restore -p:EnableWindowsTargeting=true
           git diff --check
 
       - name: Commit Companion Beta 11
