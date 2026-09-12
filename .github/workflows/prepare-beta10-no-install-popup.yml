@@ -19,60 +19,37 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Remove install success popup and bump Beta 10
+      - name: Patch Companion Beta 10
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          main = Path('src/AzerothQuesting.Companion/MainForm.cs')
-          text = main.read_text(encoding='utf-8')
-          old = '''            MessageBox.Show(
-                this,
-                $"Azeroth Questing {result.Version} is installed.\\n\\nBackup: {result.BackupDirectory}",
-                "Azeroth Questing Companion",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-
-'''
-          if old not in text:
-              raise SystemExit('Expected successful-install MessageBox block was not found')
-          text = text.replace(old, '', 1)
-          main.write_text(text, encoding='utf-8')
-
-          project = Path('src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj')
-          text = project.read_text(encoding='utf-8')
-          text = text.replace('<Version>0.1.9-beta.9</Version>', '<Version>0.1.9-beta.10</Version>', 1)
-          text = text.replace('<FileVersion>0.1.8.14</FileVersion>', '<FileVersion>0.1.8.15</FileVersion>', 1)
-          if '<Version>0.1.9-beta.10</Version>' not in text or '<FileVersion>0.1.8.15</FileVersion>' not in text:
-              raise SystemExit('Companion version bump failed')
-          project.write_text(text, encoding='utf-8')
-
-          changelog = Path('CHANGELOG.md')
-          text = changelog.read_text(encoding='utf-8')
-          header = '# Changelog\n\n'
-          if not text.startswith(header):
-              raise SystemExit('Unexpected changelog header')
-          entry = '''## 0.1.9 Beta 10 - September 12, 2026 - Available on GitHub Pre-release
-
-- **Changed** successful addon install/update/repair completion to stay inside the Companion dashboard instead of opening a modal Windows information message that requires clicking **OK**.
-- **Kept** successful-install feedback in the existing Companion status bar and activity history, so the installed addon version remains visible without interrupting the player's workflow. Error and required-action dialogs are unchanged.
-- **Changed** the Companion test build to `0.1.9-beta.10` with Windows file version `0.1.8.15` because Beta 9 had already been published and consumed before this UI change was requested.
-
-This change affects the Companion UI only; no new Azeroth Questing addon, Website, or Azeroth Questing Server build is required. GitHub compilation/installer success does not count as Windows runtime testing. On Windows, install/update or repair the addon and verify the operation completes without the success popup shown in Beta 9, while the dashboard/status/activity still report the successful addon version. Error dialogs should still appear when an install actually fails. If trusted signing remains unavailable, this Beta may be published as an explicitly unsigned testing build; Stable still requires trusted signing.
-
-'''
-          changelog.write_text(header + entry + text[len(header):], encoding='utf-8')
-          PY
-
-          grep -F '<Version>0.1.9-beta.10</Version>' src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj
-          grep -F '<FileVersion>0.1.8.15</FileVersion>' src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj
-          grep -F '## 0.1.9 Beta 10 - September 12, 2026 - Available on GitHub Pre-release' CHANGELOG.md
-          if grep -Fq 'Azeroth Questing {result.Version} is installed.' src/AzerothQuesting.Companion/MainForm.cs; then
+          FILE='src/AzerothQuesting.Companion/MainForm.cs'
+          perl -0pi -e 's/\n            MessageBox\.Show\(\n                this,\n                \$"Azeroth Questing \{result\.Version\} is installed\.\\n\\nBackup: \{result\.BackupDirectory\}",\n                "Azeroth Questing Companion",\n                MessageBoxButtons\.OK,\n                MessageBoxIcon\.Information\);\n//s' "$FILE"
+          if grep -Fq 'Azeroth Questing {result.Version} is installed.' "$FILE"; then
             echo 'Successful-install popup still present' >&2
             exit 1
           fi
+
+          PROJECT='src/AzerothQuesting.Companion/AzerothQuesting.Companion.csproj'
+          sed -i 's#<Version>0.1.9-beta.9</Version>#<Version>0.1.9-beta.10</Version>#' "$PROJECT"
+          sed -i 's#<FileVersion>0.1.8.14</FileVersion>#<FileVersion>0.1.8.15</FileVersion>#' "$PROJECT"
+          grep -F '<Version>0.1.9-beta.10</Version>' "$PROJECT"
+          grep -F '<FileVersion>0.1.8.15</FileVersion>' "$PROJECT"
+
+          printf '%s\n' \
+            '# Changelog' \
+            '' \
+            '## 0.1.9 Beta 10 - September 12, 2026 - Available on GitHub Pre-release' \
+            '' \
+            '- **Changed** successful addon install/update/repair completion to stay inside the Companion dashboard instead of opening a modal Windows information message that requires clicking **OK**.' \
+            '- **Kept** successful-install feedback in the existing Companion status bar and activity history, so the installed addon version remains visible without interrupting the player workflow. Error and required-action dialogs are unchanged.' \
+            '- **Changed** the Companion test build to `0.1.9-beta.10` with Windows file version `0.1.8.15` because Beta 9 had already been published and consumed before this UI change was requested.' \
+            '' \
+            'This change affects the Companion UI only; no new Azeroth Questing addon, Website, or Azeroth Questing Server build is required. GitHub compilation/installer success does not count as Windows runtime testing. On Windows, install/update or repair the addon and verify the operation completes without the success popup shown in Beta 9, while the dashboard/status/activity still report the successful addon version. Error dialogs should still appear when an install actually fails. If trusted signing remains unavailable, this Beta may be published as an explicitly unsigned testing build; Stable still requires trusted signing.' \
+            '' > CHANGELOG.new
+          tail -n +3 CHANGELOG.md >> CHANGELOG.new
+          mv CHANGELOG.new CHANGELOG.md
+          grep -F '## 0.1.9 Beta 10 - September 12, 2026 - Available on GitHub Pre-release' CHANGELOG.md
 
       - name: Commit Companion Beta 10
         shell: bash
