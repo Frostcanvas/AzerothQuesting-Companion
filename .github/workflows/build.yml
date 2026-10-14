@@ -12,6 +12,8 @@ permissions:
 
 jobs:
   build:
+    # Maintenance commits clean up artifacts without rebuilding the EXE.
+    if: ${{ !startsWith(github.event.head_commit.message, 'Maintenance: EXE artifact cleanup') }}
     runs-on: windows-latest
     env:
       SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -270,6 +272,7 @@ jobs:
           name: AzerothQuestingCompanion-Setup-UNSIGNED-DEVELOPMENT
           path: publish/installer/AzerothQuestingCompanion-Setup.exe
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload signed release installer artifact
         if: steps.release_meta.outputs.is_release == 'true' && steps.release_meta.outputs.signing_enabled == 'true'
@@ -278,6 +281,7 @@ jobs:
           name: AzerothQuestingCompanion-Setup-SIGNED
           path: publish/installer/AzerothQuestingCompanion-Setup.exe
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload unsigned Beta release installer artifact
         if: steps.release_meta.outputs.is_release == 'true' && steps.release_meta.outputs.is_prerelease == 'true' && steps.release_meta.outputs.signing_enabled != 'true'
@@ -286,6 +290,7 @@ jobs:
           name: AzerothQuestingCompanion-Setup-UNSIGNED-BETA
           path: publish/installer/AzerothQuestingCompanion-Setup.exe
           if-no-files-found: error
+          retention-days: 7
 
       - name: Publish GitHub Release
         if: steps.release_meta.outputs.is_release == 'true'

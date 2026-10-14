@@ -1,0 +1,103 @@
+name: Clean old EXE Actions artifacts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cleanup-exe-artifacts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Delete obsolete EXE artifacts (protect latest two successful runs per workflow)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_WORKFLOWS: "build.yml"
+          ARTIFACT_PREFIXES: "AzerothQuestingCompanion-Setup,unsigned-companion-"
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ["GH_REPO"]
+          token = os.environ["GH_TOKEN"]
+          workflows = [x.strip() for x in os.environ["BUILD_WORKFLOWS"].split(",") if x.strip()]
+          prefixes = tuple(x.strip() for x in os.environ["ARTIFACT_PREFIXES"].split(",") if x.strip())
+          if not workflows or not prefixes:
+              raise RuntimeError("Refusing cleanup without workflow and artifact-name allowlists")
+
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": "Bearer " + token,
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "frostlabs-exe-artifact-cleanup",
+          }
+
+          def api(method, path):
+              req = urllib.request.Request(
+                  "https://api.github.com/repos/" + repo + path,
+                  headers=headers,
+                  method=method,
+              )
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  raw = response.read()
+                  return json.loads(raw) if raw else None
+
+          keep = set()
+          for workflow in workflows:
+              runs = api("GET", "/actions/workflows/" + workflow + "/runs?status=success&per_page=30")["workflow_runs"]
+              latest = [int(run["id"]) for run in runs[:2]]
+              if len(latest) < 2:
+                  raise RuntimeError("Not enough successful builds in " + workflow + "; refusing cleanup")
+              keep.update(latest)
+              print("Protecting successful runs for", workflow, latest, flush=True)
+
+          artifacts = []
+          page = 1
+          while True:
+              if page > 100:
+                  raise RuntimeError("Artifact pagination exceeded safety limit; deleting nothing")
+              data = api("GET", "/actions/artifacts?per_page=100&page=" + str(page))
+              found = data.get("artifacts", [])
+              artifacts.extend(found)
+              if len(found) < 100:
+                  break
+              page += 1
+
+          delete = []
+          for artifact in artifacts:
+              if artifact.get("expired"):
+                  continue
+              if not artifact["name"].startswith(prefixes):
+                  continue
+              run_id = int((artifact.get("workflow_run") or {}).get("id") or 0)
+              if run_id in keep or run_id == 0:
+                  continue
+              delete.append(artifact)
+
+          bytes_total = sum(int(item["size_in_bytes"]) for item in delete)
+          print("Candidate artifacts:", len(delete), "estimated MiB:", bytes_total // (1024 * 1024), flush=True)
+          for artifact in delete:
+              try:
+                  api("DELETE", "/actions/artifacts/" + str(artifact["id"]))
+                  print("Deleted", artifact["id"], artifact["name"], flush=True)
+              except urllib.error.HTTPError as error:
+                  if error.code != 404:
+                      raise
+                  print("Already deleted", artifact["id"], flush=True)
+              time.sleep(0.15)
+
+          print("EXE cleanup complete; GitHub Release assets untouched.", flush=True)
+          PY
