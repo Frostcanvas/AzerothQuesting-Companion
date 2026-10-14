@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     # Maintenance commits clean up artifacts without rebuilding the EXE.
-    if: ${{ !startsWith(github.event.head_commit.message, 'Maintenance: EXE artifact cleanup') }}
+    if: "${{ !startsWith(github.event.head_commit.message, 'Maintenance: EXE artifact cleanup') }}"
     runs-on: windows-latest
     env:
       SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
