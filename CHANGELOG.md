@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.9 Beta 13 - October 18, 2026 - Development
+## 0.1.9 Beta 13 - October 18, 2026 - GitHub Pre-release
 
 - **Added** private per-character mail expiration reminders to the Windows Companion. Open Mail Reminders from the sidebar, dashboard, or tray; enter character, realm, and mail expiration time. Local Windows tray alerts are due at 7 days, 3 days, 1 day, and expiration.
 - **Privacy:** reminders remain in local `mail-reminders.json`, never enter the research Outbox or public website. Alerts require the Companion to be running. This beta does not automatically read WoW mailbox data; timers must be entered from the game.
