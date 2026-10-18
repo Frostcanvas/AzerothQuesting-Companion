@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.9 Beta 13 - October 18, 2026 - Development
+
+- **Added** private per-character mail expiration reminders to the Windows Companion. Open Mail Reminders from the sidebar, dashboard, or tray; enter character, realm, and mail expiration time. Local Windows tray alerts are due at 7 days, 3 days, 1 day, and expiration.
+- **Privacy:** reminders remain in local `mail-reminders.json`, never enter the research Outbox or public website. Alerts require the Companion to be running. This beta does not automatically read WoW mailbox data; timers must be entered from the game.
+- **Changed** Companion test version to `0.1.9-beta.13` (file version `0.1.8.18`). Windows build/runtime validation pending.
+
+
 ## 0.1.9 Beta 12 - September 12, 2026 - Available on GitHub Pre-release
 
 - **Added** `AQM2` parsing for the richer map-identity observations produced by Addon `0.3.0-beta.19`. The Companion continues parsing legacy `AQM1` records and prefers the `AQM2` copy when both share the same observation key, preserving backward compatibility without duplicate uploads.

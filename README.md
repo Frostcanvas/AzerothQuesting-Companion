@@ -2,7 +2,7 @@
 
 Windows companion application for the **Azeroth Questing** World of Warcraft addon.
 
-## Development version - v0.1.9-beta.9
+## Development version - v0.1.9-beta.13
 
 The companion currently:
 
@@ -19,6 +19,7 @@ The companion currently:
 - Imports the addon's per-character completed-quest `AQC1` handoff into a local cache and, beginning with Beta 7, creates an identity-free completed-quest contribution for the public Quest Repository when server synchronization is enabled.
 - Keeps character and realm only in the player's local completed-quest cache; those identifiers are not copied into the Quest Repository contribution.
 - Runs in the Windows notification area so it can keep watching in the background.
+- Tracks **local character mail reminders** entered by the player, with tray notifications seven, three, and one days before expiry and at expiration while the Companion is running. Mail details are private and are not uploaded. Automatic in-game mailbox capture is not implemented yet.
 - Uses a dark dashboard-style interface with addon, update, WoW path, local data, and recent activity status.
 - Shows submitted research data in a privacy-preserving viewer with aggregate counts, recent anonymous observations, class evidence, and active addon/Companion version counts.
 - Sends a lightweight authenticated heartbeat every five minutes while server synchronization is enabled so the viewer can report Companions Online using a 10-minute activity window.

@@ -20,6 +20,8 @@ internal sealed class MainForm : Form
     private readonly GitHubAddonClient _github = new();
     private readonly SnapshotQueue _snapshotQueue = new();
     private readonly CompletedQuestStore _completedQuestStore = new();
+    private readonly MailReminderService _mailReminders = new();
+    private readonly System.Windows.Forms.Timer _mailTimer = new() { Interval = 10 * 60 * 1000 };
     private readonly AddonService _addonService;
     private readonly CompanionUpdateService _updateService;
     private readonly CompanionSettings _settings;
@@ -73,6 +75,8 @@ internal sealed class MainForm : Form
         BuildTrayIcon();
 
         _updateCheckTimer.Tick += async (_, _) => await CheckForUpdatesAsync(showDialog: false);
+        _mailTimer.Tick += (_, _) => CheckMailReminders();
+        _mailTimer.Start();
         Shown += async (_, _) => await InitializeAsync();
         Resize += (_, _) =>
         {
@@ -88,6 +92,8 @@ internal sealed class MainForm : Form
             _notifyIcon?.Dispose();
             _updateCheckTimer.Stop();
             _updateCheckTimer.Dispose();
+            _mailTimer.Stop();
+            _mailTimer.Dispose();
             _serviceClient.Dispose();
             _syncGate.Dispose();
             _github.Dispose();
@@ -165,7 +171,7 @@ internal sealed class MainForm : Form
         layout.Controls.Add(CreateNavButton("Sync", async (_, _) => await SyncNowAsync(scanFirst: true)), 0, 3);
         layout.Controls.Add(CreateNavButton("Data", (_, _) => OpenResearchData()), 0, 4);
         layout.Controls.Add(CreateNavButton("Settings", async (_, _) => await BrowseForWowAsync()), 0, 5);
-        layout.Controls.Add(CreateNavButton("Logs", (_, _) => OpenPath(AppPaths.Root)), 0, 6);
+        layout.Controls.Add(CreateNavButton("Mail", (_, _) => OpenMailReminders()), 0, 6);
 
         var footer = new Label
         {
@@ -418,6 +424,9 @@ internal sealed class MainForm : Form
         buttons.Controls.Add(data);
         buttons.Controls.Add(completed);
         buttons.Controls.Add(syncNow);
+        var mail = CreateSecondaryButton("Mail Reminders");
+        mail.Click += (_, _) => OpenMailReminders();
+        buttons.Controls.Add(mail);
         layout.Controls.Add(buttons, 0, 2);
 
         var serviceSync = new CheckBox
@@ -504,6 +513,7 @@ internal sealed class MainForm : Form
             await SyncNowAsync(scanFirst: true);
         });
         menu.Items.Add("View Submitted Data", null, (_, _) => OpenResearchData());
+        menu.Items.Add("Character Mail Reminders", null, (_, _) => OpenMailReminders());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitApplication());
 
@@ -517,11 +527,38 @@ internal sealed class MainForm : Form
         _notifyIcon.DoubleClick += (_, _) => ShowFromTray();
     }
 
+    private void OpenMailReminders()
+    {
+        using var dialog = new MailReminderForm(_mailReminders);
+        dialog.ShowDialog(this);
+        CheckMailReminders();
+    }
+
+    private void CheckMailReminders()
+    {
+        try
+        {
+            foreach (var item in _mailReminders.Due())
+            {
+                var message = item.ExpiresAt <= DateTimeOffset.Now
+                    ? "Mail may have expired. Check this character."
+                    : $"Mail expires {item.ExpiresAt.ToLocalTime():MMM d, h:mm tt}. Log in to check it.";
+                _notifyIcon?.ShowBalloonTip(10000, $"WoW Mail: {item.Character} - {item.Realm}", message, ToolTipIcon.Warning);
+                AddActivity($"Mail reminder: {item.Character} - {item.Realm}. {message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AddActivity($"Mail reminder error: {ex.Message}");
+        }
+    }
+
     private async Task InitializeAsync()
     {
         try
         {
             AddActivity($"Companion {GetClientVersion()} started.");
+            CheckMailReminders();
             var saved = _settings.WowRetailPath;
             if (WowLocator.IsRetailPath(saved))
             {
