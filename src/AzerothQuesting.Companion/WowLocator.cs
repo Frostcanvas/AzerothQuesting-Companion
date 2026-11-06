@@ -28,9 +28,22 @@ internal static class WowLocator
             .FirstOrDefault(IsRetailPath);
     }
 
+    public static string? FindForeverPath(string? retailPath)
+    {
+        var retailParent = retailPath is null ? null : Directory.GetParent(retailPath);
+        var candidates = new[]
+        {
+            retailParent is null ? null : Path.Combine(retailParent.FullName, "_forever_"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "World of Warcraft", "_forever_"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "World of Warcraft", "_forever_"),
+        };
+        return candidates.FirstOrDefault(IsForeverPath);
+    }
+
     public static bool IsRetailPath(string? path)
     {
         return !string.IsNullOrWhiteSpace(path)
+            && !string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(path)), "_forever_", StringComparison.OrdinalIgnoreCase)
             && Directory.Exists(path)
             && File.Exists(Path.Combine(path, "Wow.exe"))
             && Directory.Exists(Path.Combine(path, "Interface"));

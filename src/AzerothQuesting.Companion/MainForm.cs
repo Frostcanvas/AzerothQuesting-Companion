@@ -32,6 +32,11 @@ internal sealed class MainForm : Form
     private readonly Label _clientVersionValue = CreateValueLabel("Starting...");
     private readonly Label _clientUpdateValue = CreateValueLabel("Not checked");
     private readonly Label _wowPathValue = CreateValueLabel("Detecting...");
+    private readonly ComboBox _addonTarget = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 120,
+    };
     private readonly Label _installedAddonValue = CreateValueLabel("Waiting for WoW path");
     private readonly Label _latestAddonValue = CreateValueLabel("Not checked");
     private readonly Label _queueValue = CreateValueLabel("0");
@@ -48,9 +53,12 @@ internal sealed class MainForm : Form
     private readonly Button _syncButton = CreateActionButton("Sync Now", Purple);
     private readonly Button _channelButton = CreateActionButton("Channel: STABLE", Purple);
 
-    private SavedVariablesWatcher? _watcher;
+    private SavedVariablesWatcher? _retailWatcher;
+    private SavedVariablesWatcher? _foreverWatcher;
+    private bool HasWatcher => _retailWatcher is not null || _foreverWatcher is not null;
+    private bool IsForeverTarget => _addonTarget.SelectedIndex == 1;
+    private string? AddonTargetPath => IsForeverTarget ? _settings.WowForeverPath : _settings.WowRetailPath;
     private NotifyIcon? _notifyIcon;
-    private string? _retailPath;
     private bool _exitRequested;
     private bool _busy;
 
@@ -88,7 +96,8 @@ internal sealed class MainForm : Form
         FormClosing += OnFormClosing;
         FormClosed += (_, _) =>
         {
-            _watcher?.Dispose();
+            _retailWatcher?.Dispose();
+            _foreverWatcher?.Dispose();
             _notifyIcon?.Dispose();
             _updateCheckTimer.Stop();
             _updateCheckTimer.Dispose();
@@ -170,7 +179,7 @@ internal sealed class MainForm : Form
         layout.Controls.Add(CreateNavButton("Addon", (_, _) => _installButton.Focus()), 0, 2);
         layout.Controls.Add(CreateNavButton("Sync", async (_, _) => await SyncNowAsync(scanFirst: true)), 0, 3);
         layout.Controls.Add(CreateNavButton("Data", (_, _) => OpenResearchData()), 0, 4);
-        layout.Controls.Add(CreateNavButton("Settings", async (_, _) => await BrowseForWowAsync()), 0, 5);
+        layout.Controls.Add(CreateNavButton("Settings", async (_, _) => await BrowseForWowAsync(IsForeverTarget)), 0, 5);
         layout.Controls.Add(CreateNavButton("Mail", (_, _) => OpenMailReminders()), 0, 6);
 
         var footer = new Label
@@ -408,9 +417,27 @@ internal sealed class MainForm : Form
         };
         var detect = CreateSecondaryButton("Detect WoW");
         detect.Click += async (_, _) => await DetectWowAsync();
-        var browse = CreateSecondaryButton("Browse...");
-        browse.Click += async (_, _) => await BrowseForWowAsync();
-        var addOns = CreateSecondaryButton("Open AddOns Folder");
+        var browse = CreateSecondaryButton("Browse Retail...");
+        browse.Click += async (_, _) => await BrowseForWowAsync(false);
+        var browseForever = CreateSecondaryButton("Browse Forever...");
+        browseForever.Click += async (_, _) => await BrowseForWowAsync(true);
+        _addonTarget.Items.AddRange(["Retail", "Forever"]);
+        _addonTarget.SelectedIndex = 0;
+        _addonTarget.SelectedIndexChanged += async (_, _) =>
+        {
+            if (!_busy && TryBeginBusy($"Checking {_addonTarget.Text} addon..."))
+            {
+                try
+                {
+                    await RefreshRemoteAddonStatusAsync();
+                }
+                finally
+                {
+                    EndBusy();
+                }
+            }
+        };
+        var addOns = CreateSecondaryButton("Open Selected AddOns");
         addOns.Click += (_, _) => OpenAddOnsFolder();
         var data = CreateSecondaryButton("View Submitted Data");
         data.Click += (_, _) => OpenResearchData();
@@ -420,6 +447,8 @@ internal sealed class MainForm : Form
         syncNow.Click += async (_, _) => await SyncNowAsync(scanFirst: true);
         buttons.Controls.Add(detect);
         buttons.Controls.Add(browse);
+        buttons.Controls.Add(browseForever);
+        buttons.Controls.Add(_addonTarget);
         buttons.Controls.Add(addOns);
         buttons.Controls.Add(data);
         buttons.Controls.Add(completed);
@@ -559,16 +588,14 @@ internal sealed class MainForm : Form
         {
             AddActivity($"Companion {GetClientVersion()} started.");
             CheckMailReminders();
-            var saved = _settings.WowRetailPath;
-            if (WowLocator.IsSupportedPath(saved))
+            // Migrate a Forever folder saved by the earlier single-path beta.
+            if (WowLocator.IsForeverPath(_settings.WowRetailPath))
             {
-                await ConfigureGamePathAsync(saved!);
-            }
-            else
-            {
-                await DetectWowAsync();
+                _settings.WowForeverPath ??= _settings.WowRetailPath;
+                _settings.WowRetailPath = null;
             }
 
+            await DetectWowAsync();
             await CheckForUpdatesAsync(showDialog: false);
             _updateCheckTimer.Start();
         }
@@ -581,27 +608,34 @@ internal sealed class MainForm : Form
 
     private async Task DetectWowAsync()
     {
-        if (!TryBeginBusy("Detecting World of Warcraft Retail..."))
+        if (!TryBeginBusy("Detecting World of Warcraft installations..."))
         {
             return;
         }
 
         try
         {
-            var path = await Task.Run(WowLocator.FindRetailPath);
-            if (path is null)
+            var retail = _settings.WowRetailPath;
+            if (!WowLocator.IsRetailPath(retail))
             {
-                _wowPathValue.Text = "Not found - use Browse";
-                _installedAddonValue.Text = "WoW not detected";
-                _installButton.Enabled = false;
-                SetStatus("WoW Retail was not found automatically. Use Browse to select _retail_ or _forever_.");
-                AddActivity("WoW Retail was not found automatically.");
-                return;
+                retail = await Task.Run(WowLocator.FindRetailPath);
             }
 
-            await ConfigureGamePathAsync(path);
-            SetStatus("WoW Retail detected. Companion watcher is running.");
-            AddActivity("WoW Retail detected.");
+            var forever = _settings.WowForeverPath;
+            if (!WowLocator.IsForeverPath(forever))
+            {
+                forever = await Task.Run(() => WowLocator.FindForeverPath(retail));
+            }
+
+            SetGamePath(retail, forever: false);
+            SetGamePath(forever, forever: true);
+            if (retail is null && forever is not null)
+            {
+                _addonTarget.SelectedIndex = 1;
+            }
+
+            await RefreshGamePathsAsync();
+            SetStatus(HasWatcher ? "WoW paths loaded. Quest scans use both configured locations." : "Use Browse Retail or Browse Forever to select a game folder.");
         }
         finally
         {
@@ -609,59 +643,100 @@ internal sealed class MainForm : Form
         }
     }
 
-    private async Task BrowseForWowAsync()
+    private async Task BrowseForWowAsync(bool forever)
     {
-        using var dialog = new FolderBrowserDialog
-        {
-            Description = "Select the _retail_ or _forever_ game folder.",
-            UseDescriptionForTitle = true,
-            ShowNewFolderButton = false,
-        };
-
-        if (!string.IsNullOrWhiteSpace(_retailPath) && Directory.Exists(_retailPath))
-        {
-            dialog.InitialDirectory = _retailPath;
-        }
-
-        if (dialog.ShowDialog(this) != DialogResult.OK)
+        if (!TryBeginBusy("Selecting a World of Warcraft game folder..."))
         {
             return;
         }
 
-        var candidate = NormalizeGameSelection(dialog.SelectedPath);
-        if (!WowLocator.IsSupportedPath(candidate))
+        try
         {
-            MessageBox.Show(this, "Select a World of Warcraft _retail_ or _forever_ game folder.", "Azeroth Questing Companion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
+            var folder = forever ? "_forever_" : "_retail_";
+            using var dialog = new FolderBrowserDialog
+            {
+                Description = $"Select the {folder} game folder.",
+                UseDescriptionForTitle = true,
+                ShowNewFolderButton = false,
+            };
 
-        await ConfigureGamePathAsync(candidate!);
-        SetStatus("WoW game path saved. Companion watcher is running.");
-        AddActivity("WoW game path changed.");
+            var previous = forever ? _settings.WowForeverPath : _settings.WowRetailPath;
+            if (Directory.Exists(previous))
+            {
+                dialog.InitialDirectory = previous!;
+            }
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            var candidate = NormalizeGameSelection(dialog.SelectedPath, forever);
+            if (candidate is null)
+            {
+                MessageBox.Show(this, $"Select a valid {folder} game folder.", "Azeroth Questing Companion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            SetGamePath(candidate, forever);
+            _addonTarget.SelectedIndex = forever ? 1 : 0;
+            await RefreshGamePathsAsync();
+            SetStatus($"{_addonTarget.Text} path saved. Quest scans use both configured locations.");
+        }
+        finally
+        {
+            EndBusy();
+        }
     }
 
-    private async Task ConfigureGamePathAsync(string path)
+    private void SetGamePath(string? path, bool forever)
     {
-        _watcher?.Dispose();
-        _watcher = null;
+        ref var watcher = ref (forever ? ref _foreverWatcher : ref _retailWatcher);
+        watcher?.Dispose();
+        watcher = null;
 
-        _retailPath = Path.GetFullPath(path);
-        _settings.WowRetailPath = _retailPath;
+        if (forever)
+        {
+            _settings.WowForeverPath = path;
+        }
+        else
+        {
+            _settings.WowRetailPath = path;
+        }
+
+        if (path is null)
+        {
+            return;
+        }
+
+        watcher = new SavedVariablesWatcher(path, _snapshotQueue, _completedQuestStore);
+        watcher.SnapshotProcessed += WatcherOnSnapshotProcessed;
+        watcher.CompletedQuestDataProcessed += WatcherOnCompletedQuestDataProcessed;
+        watcher.WatcherError += WatcherOnError;
+        watcher.Start();
+    }
+
+    private async Task RefreshGamePathsAsync()
+    {
         SettingsService.Save(_settings);
-        _wowPathValue.Text = _retailPath;
-        _installButton.Enabled = true;
-        _scanButton.Enabled = true;
-
-        _watcher = new SavedVariablesWatcher(_retailPath, _snapshotQueue, _completedQuestStore);
-        _watcher.SnapshotProcessed += WatcherOnSnapshotProcessed;
-        _watcher.CompletedQuestDataProcessed += WatcherOnCompletedQuestDataProcessed;
-        _watcher.WatcherError += WatcherOnError;
-        _watcher.Start();
-
-        await _watcher.ScanExistingAsync();
+        _wowPathValue.Text = $"Retail: {_settings.WowRetailPath ?? "Not configured"}\nForever: {_settings.WowForeverPath ?? "Not configured"}";
+        _scanButton.Enabled = HasWatcher;
+        await ScanGamePathsAsync();
         RefreshLocalStatus();
         await RefreshRemoteAddonStatusAsync();
         await TrySyncPendingAsync(quiet: true);
+    }
+
+    private async Task ScanGamePathsAsync()
+    {
+        foreach (var watcher in new[] { _retailWatcher, _foreverWatcher })
+        {
+            if (watcher is not null)
+            {
+                watcher.Start();
+                await watcher.ScanExistingAsync();
+            }
+        }
     }
 
     private void UpdateChannelButtonText()
@@ -701,7 +776,8 @@ internal sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            var installed = _retailPath is null ? null : AddonService.GetInstalledVersion(_retailPath);
+            var targetPath = AddonTargetPath;
+            var installed = targetPath is null ? null : AddonService.GetInstalledVersion(targetPath);
             _installedAddonValue.Text = installed is null ? "Not installed" : installed;
             _latestAddonValue.Text = "Check failed";
             _heroStatusValue.Text = "Addon update check failed";
@@ -782,12 +858,13 @@ internal sealed class MainForm : Form
                 _clientUpdateValue.Text = $"Up to date ({companion.Version})";
             }
 
-            var installedAddon = _retailPath is null ? null : AddonService.GetInstalledVersion(_retailPath);
+            var targetPath = AddonTargetPath;
+            var installedAddon = targetPath is null ? null : AddonService.GetInstalledVersion(targetPath);
             var addonSummary = addonError is not null
                 ? $"Addon: update check failed ({addonError})"
                 : addon is null
                     ? "Addon: update status unavailable"
-                    : _retailPath is null
+                    : targetPath is null
                         ? $"Addon: latest {addon.Version}; detect WoW to compare the installed version"
                         : installedAddon is null
                             ? $"Addon: not installed; latest {addon.Version}"
@@ -845,8 +922,10 @@ internal sealed class MainForm : Form
     private void ApplyAddonRemoteStatus(RemoteAddonPackage remote)
     {
         _latestAddonValue.Text = remote.Version;
+        var game = _addonTarget.Text;
 
-        if (_retailPath is null)
+        var targetPath = AddonTargetPath;
+        if (targetPath is null)
         {
             _installedAddonValue.Text = "WoW not detected";
             _heroStatusValue.Text = $"Latest addon: {remote.Version}";
@@ -855,31 +934,31 @@ internal sealed class MainForm : Form
             return;
         }
 
-        var installed = AddonService.GetInstalledVersion(_retailPath);
+        var installed = AddonService.GetInstalledVersion(targetPath);
         if (installed is null)
         {
-            _installedAddonValue.Text = "Not installed";
+            _installedAddonValue.Text = $"{game}: Not installed";
             _heroStatusValue.Text = $"Addon not installed - latest {remote.Version}";
             _heroStatusValue.ForeColor = Gold;
             _installButton.Text = "Install Addon";
         }
         else if (VersionsMatch(installed, remote.Version))
         {
-            _installedAddonValue.Text = installed;
+            _installedAddonValue.Text = $"{game}: {installed}";
             _heroStatusValue.Text = $"Addon installed - {installed} is current";
             _heroStatusValue.ForeColor = Green;
             _installButton.Text = "Reinstall Addon";
         }
         else if (IsNewerVersion(installed, remote.Version))
         {
-            _installedAddonValue.Text = installed;
+            _installedAddonValue.Text = $"{game}: {installed}";
             _heroStatusValue.Text = $"Addon update {remote.Version} available";
             _heroStatusValue.ForeColor = Gold;
             _installButton.Text = "Update Addon";
         }
         else
         {
-            _installedAddonValue.Text = installed;
+            _installedAddonValue.Text = $"{game}: {installed}";
             _heroStatusValue.Text = $"Installed addon {installed} is newer than channel version {remote.Version}";
             _heroStatusValue.ForeColor = Green;
             _installButton.Text = "Install Channel Version";
@@ -890,7 +969,8 @@ internal sealed class MainForm : Form
 
     private async Task InstallAddonAsync()
     {
-        if (_retailPath is null)
+        var targetPath = AddonTargetPath;
+        if (targetPath is null)
         {
             MessageBox.Show(this, "Detect or browse to your WoW installation first.", "Azeroth Questing Companion", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
@@ -905,7 +985,7 @@ internal sealed class MainForm : Form
         try
         {
             var progress = new Progress<string>(SetStatus);
-            var result = await _addonService.InstallOrUpdateAsync(_retailPath, progress);
+            var result = await _addonService.InstallOrUpdateAsync(targetPath, progress);
             await RefreshRemoteAddonStatusAsync();
             RefreshLocalStatus();
 
@@ -920,14 +1000,14 @@ internal sealed class MainForm : Form
         }
         finally
         {
-            _installButton.Enabled = _retailPath is not null;
+            _installButton.Enabled = AddonTargetPath is not null;
             EndBusy();
         }
     }
 
     private async Task ScanNowAsync()
     {
-        if (_watcher is null)
+        if (!HasWatcher)
         {
             SetStatus("Detect WoW before scanning SavedVariables.");
             return;
@@ -940,13 +1020,13 @@ internal sealed class MainForm : Form
 
         try
         {
-            await _watcher.ScanExistingAsync();
+            await ScanGamePathsAsync();
             RefreshLocalStatus();
             if (_settings.ServiceSyncEnabled)
             {
                 await TrySyncPendingAsync(quiet: true);
             }
-            SetStatus("SavedVariables scan complete. New observations were queued only when the data changed.");
+            SetStatus("SavedVariables scan complete for both configured game locations.");
             AddActivity("Manual SavedVariables scan completed.");
         }
         finally
@@ -971,9 +1051,9 @@ internal sealed class MainForm : Form
                 return;
             }
 
-            if (scanFirst && _watcher is not null)
+            if (scanFirst && HasWatcher)
             {
-                await _watcher.ScanExistingAsync();
+                await ScanGamePathsAsync();
                 RefreshLocalStatus();
             }
 
@@ -1123,13 +1203,14 @@ internal sealed class MainForm : Form
 
     private void OpenAddOnsFolder()
     {
-        if (_retailPath is null)
+        var targetPath = AddonTargetPath;
+        if (targetPath is null)
         {
             SetStatus("Detect WoW before opening the AddOns folder.");
             return;
         }
 
-        var path = AddonService.GetAddOnsPath(_retailPath);
+        var path = AddonService.GetAddOnsPath(targetPath);
         Directory.CreateDirectory(path);
         OpenPath(path);
     }
@@ -1144,21 +1225,16 @@ internal sealed class MainForm : Form
         });
     }
 
-    private static string? NormalizeGameSelection(string selectedPath)
+    private static string? NormalizeGameSelection(string selectedPath, bool forever)
     {
-        if (WowLocator.IsSupportedPath(selectedPath))
+        Func<string?, bool> isGamePath = forever ? WowLocator.IsForeverPath : WowLocator.IsRetailPath;
+        if (isGamePath(selectedPath))
         {
-            return selectedPath;
+            return Path.GetFullPath(selectedPath);
         }
 
-        var retail = Path.Combine(selectedPath, "_retail_");
-        if (WowLocator.IsRetailPath(retail))
-        {
-            return retail;
-        }
-
-        var forever = Path.Combine(selectedPath, "_forever_");
-        return WowLocator.IsForeverPath(forever) ? forever : selectedPath;
+        var child = Path.Combine(selectedPath, forever ? "_forever_" : "_retail_");
+        return isGamePath(child) ? Path.GetFullPath(child) : null;
     }
 
     private bool TryBeginBusy(string message)
@@ -1170,6 +1246,7 @@ internal sealed class MainForm : Form
         }
 
         _busy = true;
+        _addonTarget.Enabled = false;
         UseWaitCursor = true;
         SetStatus(message);
         return true;
@@ -1178,6 +1255,7 @@ internal sealed class MainForm : Form
     private void EndBusy()
     {
         _busy = false;
+        _addonTarget.Enabled = true;
         UseWaitCursor = false;
     }
 

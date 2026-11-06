@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.1.9 Beta 14 - November 6, 2026 - In development
+## 0.1.9 Beta 14 - November 6, 2026 - GitHub Pre-release
 
 - **Added** local completed-quest import for Blizzard's World of Warcraft: Forever. Browse to `_forever_` and use Azeroth Questing addon `0.3.0-beta.31` or later.
+- **Added** separate saved Retail and Forever locations. Scans read both locations, and the game selector controls which addon folder to install into or open.
 - **Separated** Forever and Retail character snapshots in the local cache and added the game to the TSV export. Forever files are excluded from the research upload queue.
 - Windows and in-game validation are pending.
 

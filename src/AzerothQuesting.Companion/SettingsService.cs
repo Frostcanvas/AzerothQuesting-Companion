@@ -25,6 +25,7 @@ internal static class UpdateChannelSettings
 internal sealed class CompanionSettings
 {
     public string? WowRetailPath { get; set; }
+    public string? WowForeverPath { get; set; }
     public bool ServiceSyncEnabled { get; set; } = true;
     public string ServiceBaseUrl { get; set; } = SettingsService.DefaultServiceBaseUrl;
     public string UpdateChannel { get; set; } = "stable";

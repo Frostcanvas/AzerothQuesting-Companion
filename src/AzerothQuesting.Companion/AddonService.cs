@@ -46,7 +46,7 @@ internal sealed class AddonService
 
     public static bool IsWowRunning()
     {
-        foreach (var name in new[] { "Wow", "WowT", "WowClassic", "WowClassicT" })
+        foreach (var name in new[] { "Wow", "WowT", "WowClassic", "WowClassicT", "WowForever" })
         {
             Process[] processes = [];
             try
@@ -106,27 +106,36 @@ internal sealed class AddonService
             progress?.Report($"Downloading Azeroth Questing {remote.Version}...");
             await _github.DownloadAsync(remote.DownloadUrl, zipPath, cancellationToken);
 
-            progress?.Report("Preparing addon backup...");
-            var backupRoot = Path.Combine(AppPaths.Backups, DateTime.Now.ToString("yyyyMMdd-HHmmss"));
-            Directory.CreateDirectory(backupRoot);
-
-            var addOnsPath = GetAddOnsPath(retailPath);
-            Directory.CreateDirectory(addOnsPath);
-            var targetAddon = Path.Combine(addOnsPath, "AzerothQuesting");
-            BackupDirectoryIfPresent(targetAddon, Path.Combine(backupRoot, "AzerothQuesting"));
-
             progress?.Report("Installing addon files...");
             Directory.CreateDirectory(extractPath);
             ZipFile.ExtractToDirectory(zipPath, extractPath, overwriteFiles: true);
 
             var toc = Directory
                 .EnumerateFiles(extractPath, "AzerothQuesting.toc", SearchOption.AllDirectories)
+                .OrderBy(path => path.Length)
                 .FirstOrDefault();
 
             if (toc is null)
             {
                 throw new InvalidDataException("The downloaded package did not contain AzerothQuesting.toc.");
             }
+
+            var isForever = WowLocator.IsForeverPath(retailPath);
+            if (isForever && !File.ReadLines(toc).Any(line =>
+                    line.StartsWith("## Interface:", StringComparison.OrdinalIgnoreCase)
+                    && line[(line.IndexOf(':') + 1)..].Split(',', StringSplitOptions.TrimEntries).Contains("16001")))
+            {
+                throw new InvalidDataException("This addon release does not support Forever. Select the Beta channel for a Forever-compatible release.");
+            }
+
+            progress?.Report("Preparing addon backup...");
+            var backupRoot = Path.Combine(AppPaths.Backups, DateTime.Now.ToString("yyyyMMdd-HHmmss"), isForever ? "Forever" : "Retail");
+            Directory.CreateDirectory(backupRoot);
+
+            var addOnsPath = GetAddOnsPath(retailPath);
+            Directory.CreateDirectory(addOnsPath);
+            var targetAddon = Path.Combine(addOnsPath, "AzerothQuesting");
+            BackupDirectoryIfPresent(targetAddon, Path.Combine(backupRoot, "AzerothQuesting"));
 
             var sourceAddon = Path.GetDirectoryName(toc)!;
             var stagedAddon = Path.Combine(addOnsPath, $".AzerothQuesting.update-{Guid.NewGuid():N}");
