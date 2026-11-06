@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 
 namespace AzerothQuesting.Companion;
 
@@ -15,9 +16,23 @@ internal sealed class SnapshotQueue
         ? Directory.EnumerateFiles(AppPaths.Outbox, "*.lua", SearchOption.TopDirectoryOnly).Count()
         : 0;
 
-    public async Task<SnapshotResult> EnqueueAsync(string sourcePath, CancellationToken cancellationToken = default)
+    public async Task<SnapshotResult> EnqueueAsync(
+        string sourcePath,
+        CancellationToken cancellationToken = default,
+        bool foreverResearchOnly = false)
     {
         var bytes = await ReadStableFileAsync(sourcePath, cancellationToken);
+        if (foreverResearchOnly)
+        {
+            var research = Service01Client.FilterForeverResearch(Encoding.UTF8.GetString(bytes));
+            if (research.Length == 0)
+            {
+                return new SnapshotResult(false, sourcePath, null, string.Empty);
+            }
+
+            bytes = Encoding.UTF8.GetBytes(research);
+        }
+
         var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
         AppPaths.EnsureCreated();

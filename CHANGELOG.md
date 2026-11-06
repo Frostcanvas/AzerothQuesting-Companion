@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9 Beta 15 - November 6, 2026 - GitHub Pre-release
+
+- **Added** upload of anonymous Forever quest and map observations tagged with Blizzard product ID 18. These records populate the separate product 18 partition on a server that supports product-based research.
+- **Kept** per-character completed-quest data local for Forever. Unpartitioned records and raw Forever SavedVariables are excluded from upload.
+- Windows and live server validation are tracked separately.
+
 ## 0.1.9 Beta 14 - November 6, 2026 - GitHub Pre-release
 
 - **Added** local completed-quest import for Blizzard's World of Warcraft: Forever. Browse to `_forever_` and use Azeroth Questing addon `0.3.0-beta.31` or later.

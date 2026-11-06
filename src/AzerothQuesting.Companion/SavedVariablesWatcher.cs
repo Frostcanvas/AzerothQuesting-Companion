@@ -104,11 +104,6 @@ internal sealed class SavedVariablesWatcher : IDisposable
 
     private IEnumerable<string> EnumerateResearchDataFiles()
     {
-        if (_isForever)
-        {
-            return [];
-        }
-
         var accountRoot = Path.Combine(_retailPath, "WTF", "Account");
         if (!Directory.Exists(accountRoot))
         {
@@ -193,7 +188,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
         {
             await ProcessCompletedQuestFileAsync(path, cancellationToken);
         }
-        else if (!_isForever)
+        else
         {
             await ProcessResearchFileAsync(path, cancellationToken);
         }
@@ -203,7 +198,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
     {
         try
         {
-            var result = await _queue.EnqueueAsync(path, cancellationToken);
+            var result = await _queue.EnqueueAsync(path, cancellationToken, foreverResearchOnly: _isForever);
             SnapshotProcessed?.Invoke(this, new SnapshotQueuedEventArgs(path, result.Queued, result.Hash));
         }
         catch (Exception ex)
