@@ -395,7 +395,7 @@ internal sealed class MainForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        layout.Controls.Add(CreateSectionTitle("World of Warcraft Retail"), 0, 0);
+        layout.Controls.Add(CreateSectionTitle("World of Warcraft"), 0, 0);
         _wowPathValue.MaximumSize = new Size(850, 42);
         layout.Controls.Add(_wowPathValue, 0, 1);
 
@@ -560,9 +560,9 @@ internal sealed class MainForm : Form
             AddActivity($"Companion {GetClientVersion()} started.");
             CheckMailReminders();
             var saved = _settings.WowRetailPath;
-            if (WowLocator.IsRetailPath(saved))
+            if (WowLocator.IsSupportedPath(saved))
             {
-                await ConfigureRetailPathAsync(saved!);
+                await ConfigureGamePathAsync(saved!);
             }
             else
             {
@@ -594,12 +594,12 @@ internal sealed class MainForm : Form
                 _wowPathValue.Text = "Not found - use Browse";
                 _installedAddonValue.Text = "WoW not detected";
                 _installButton.Enabled = false;
-                SetStatus("WoW Retail was not found automatically. Use Browse to select the _retail_ folder.");
+                SetStatus("WoW Retail was not found automatically. Use Browse to select _retail_ or _forever_.");
                 AddActivity("WoW Retail was not found automatically.");
                 return;
             }
 
-            await ConfigureRetailPathAsync(path);
+            await ConfigureGamePathAsync(path);
             SetStatus("WoW Retail detected. Companion watcher is running.");
             AddActivity("WoW Retail detected.");
         }
@@ -613,7 +613,7 @@ internal sealed class MainForm : Form
     {
         using var dialog = new FolderBrowserDialog
         {
-            Description = "Select World of Warcraft's _retail_ folder (or the World of Warcraft folder containing it).",
+            Description = "Select the _retail_ or _forever_ game folder.",
             UseDescriptionForTitle = true,
             ShowNewFolderButton = false,
         };
@@ -628,19 +628,19 @@ internal sealed class MainForm : Form
             return;
         }
 
-        var candidate = NormalizeRetailSelection(dialog.SelectedPath);
-        if (!WowLocator.IsRetailPath(candidate))
+        var candidate = NormalizeGameSelection(dialog.SelectedPath);
+        if (!WowLocator.IsSupportedPath(candidate))
         {
-            MessageBox.Show(this, "That folder does not look like a World of Warcraft Retail installation. Select the _retail_ folder that contains Wow.exe.", "Azeroth Questing Companion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, "Select a World of Warcraft _retail_ or _forever_ game folder.", "Azeroth Questing Companion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        await ConfigureRetailPathAsync(candidate!);
-        SetStatus("WoW Retail path saved. Companion watcher is running.");
-        AddActivity("WoW Retail path changed.");
+        await ConfigureGamePathAsync(candidate!);
+        SetStatus("WoW game path saved. Companion watcher is running.");
+        AddActivity("WoW game path changed.");
     }
 
-    private async Task ConfigureRetailPathAsync(string path)
+    private async Task ConfigureGamePathAsync(string path)
     {
         _watcher?.Dispose();
         _watcher = null;
@@ -892,7 +892,7 @@ internal sealed class MainForm : Form
     {
         if (_retailPath is null)
         {
-            MessageBox.Show(this, "Detect or browse to your WoW Retail installation first.", "Azeroth Questing Companion", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "Detect or browse to your WoW installation first.", "Azeroth Questing Companion", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
@@ -1144,15 +1144,21 @@ internal sealed class MainForm : Form
         });
     }
 
-    private static string? NormalizeRetailSelection(string selectedPath)
+    private static string? NormalizeGameSelection(string selectedPath)
     {
-        if (WowLocator.IsRetailPath(selectedPath))
+        if (WowLocator.IsSupportedPath(selectedPath))
         {
             return selectedPath;
         }
 
         var retail = Path.Combine(selectedPath, "_retail_");
-        return WowLocator.IsRetailPath(retail) ? retail : selectedPath;
+        if (WowLocator.IsRetailPath(retail))
+        {
+            return retail;
+        }
+
+        var forever = Path.Combine(selectedPath, "_forever_");
+        return WowLocator.IsForeverPath(forever) ? forever : selectedPath;
     }
 
     private bool TryBeginBusy(string message)

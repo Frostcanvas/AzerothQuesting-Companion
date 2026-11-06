@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9 Beta 14 - November 6, 2026 - In development
+
+- **Added** local completed-quest import for Blizzard's World of Warcraft: Forever. Browse to `_forever_` and use Azeroth Questing addon `0.3.0-beta.31` or later.
+- **Separated** Forever and Retail character snapshots in the local cache and added the game to the TSV export. Forever files are excluded from the research upload queue.
+- Windows and in-game validation are pending.
+
 ## 0.1.9 Beta 13 - October 18, 2026 - GitHub Pre-release
 
 - **Added** private per-character mail expiration reminders to the Windows Companion. Open Mail Reminders from the sidebar, dashboard, or tray; enter character, realm, and mail expiration time. Local Windows tray alerts are due at 7 days, 3 days, 1 day, and expiration.

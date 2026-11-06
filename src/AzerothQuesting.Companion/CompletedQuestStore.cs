@@ -95,7 +95,8 @@ internal sealed class CompletedQuestStore
 
     public async Task<CompletedQuestImportResult> ImportFileAsync(
         string path,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool isForever = false)
     {
         if (!TryGetCharacterIdentity(path, out var realm, out var character))
         {
@@ -103,10 +104,10 @@ internal sealed class CompletedQuestStore
         }
 
         var text = await File.ReadAllTextAsync(path, cancellationToken);
-        return ImportSnapshot(text, realm, character);
+        return ImportSnapshot(text, realm, character, isForever);
     }
 
-    private CompletedQuestImportResult ImportSnapshot(string text, string realm, string character)
+    private CompletedQuestImportResult ImportSnapshot(string text, string realm, string character, bool isForever)
     {
         CompletedQuestCharacterSnapshot? newest = null;
         foreach (Match match in WireRegex.Matches(text))
@@ -123,9 +124,10 @@ internal sealed class CompletedQuestStore
             return new CompletedQuestImportResult(false, false, character, realm, 0);
         }
 
+        newest.IsForever = isForever;
         lock (_sync)
         {
-            var key = realm + "\0" + character;
+            var key = CharacterKey(newest);
             if (_characters.TryGetValue(key, out var existing) && existing.CapturedAt > newest.CapturedAt)
             {
                 return new CompletedQuestImportResult(true, false, character, realm, existing.Quests.Count);
@@ -140,6 +142,12 @@ internal sealed class CompletedQuestStore
 
             return new CompletedQuestImportResult(true, changed, character, realm, newest.Quests.Count);
         }
+    }
+
+    private static string CharacterKey(CompletedQuestCharacterSnapshot snapshot)
+    {
+        var game = snapshot.IsForever ? "Forever" : "Retail";
+        return game + "\0" + snapshot.Realm + "\0" + snapshot.Character;
     }
 
     private static CompletedQuestCharacterSnapshot? ParseWire(string wire, string realm, string character)
@@ -258,7 +266,7 @@ internal sealed class CompletedQuestStore
                 }
 
                 snapshot.Quests ??= new Dictionary<int, string>();
-                _characters[snapshot.Realm + "\0" + snapshot.Character] = snapshot;
+                _characters[CharacterKey(snapshot)] = snapshot;
             }
         }
         catch (JsonException)
@@ -294,7 +302,7 @@ internal sealed class CompletedQuestStore
     {
         var lines = new List<string>
         {
-            "Character\tRealm\tFaction\tClass\tLevel\tQuest ID\tQuest Name\tCaptured At\tAddon Version",
+            "Character\tRealm\tFaction\tClass\tLevel\tQuest ID\tQuest Name\tCaptured At\tAddon Version\tGame",
         };
 
         foreach (var snapshot in _characters.Values
@@ -312,7 +320,8 @@ internal sealed class CompletedQuestStore
                     quest.Key.ToString(),
                     SafeField(quest.Value),
                     snapshot.CapturedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz"),
-                    SafeField(snapshot.AddonVersion)));
+                    SafeField(snapshot.AddonVersion),
+                    snapshot.IsForever ? "Forever" : "Retail"));
             }
         }
 
@@ -335,6 +344,7 @@ internal sealed class CompletedQuestStore
 
     private sealed class CompletedQuestCharacterSnapshot
     {
+        public bool IsForever { get; set; }
         public string Character { get; set; } = string.Empty;
         public string Realm { get; set; } = string.Empty;
         public string Faction { get; set; } = string.Empty;

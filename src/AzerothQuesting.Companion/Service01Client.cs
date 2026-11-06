@@ -262,7 +262,7 @@ internal sealed partial class Service01Client : IDisposable
     private string? GetInstalledAddonVersion()
     {
         var retailPath = _settings.WowRetailPath;
-        if (!WowLocator.IsRetailPath(retailPath))
+        if (!WowLocator.IsSupportedPath(retailPath))
         {
             return null;
         }

@@ -36,6 +36,18 @@ internal static class WowLocator
             && Directory.Exists(Path.Combine(path, "Interface"));
     }
 
+    public static bool IsForeverPath(string? path)
+    {
+        return !string.IsNullOrWhiteSpace(path)
+            && string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(path)), "_forever_", StringComparison.OrdinalIgnoreCase)
+            && Directory.Exists(path)
+            && (File.Exists(Path.Combine(path, "Wow.exe"))
+                || File.Exists(Path.Combine(path, "WowForever.exe"))
+                || Directory.Exists(Path.Combine(path, "WTF", "Account")));
+    }
+
+    public static bool IsSupportedPath(string? path) => IsRetailPath(path) || IsForeverPath(path);
+
     private static IEnumerable<string> GetRegistryCandidates()
     {
         var results = new List<string>();

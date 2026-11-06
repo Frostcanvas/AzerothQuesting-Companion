@@ -35,6 +35,7 @@ internal sealed class CompletedQuestDataEventArgs : EventArgs
 internal sealed class SavedVariablesWatcher : IDisposable
 {
     private readonly string _retailPath;
+    private readonly bool _isForever;
     private readonly SnapshotQueue _queue;
     private readonly CompletedQuestStore _completedQuestStore;
     private readonly CompletedQuestRepositoryQueue _completedQuestRepositoryQueue = new();
@@ -46,6 +47,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
     public SavedVariablesWatcher(string retailPath, SnapshotQueue queue, CompletedQuestStore completedQuestStore)
     {
         _retailPath = retailPath;
+        _isForever = WowLocator.IsForeverPath(retailPath);
         _queue = queue;
         _completedQuestStore = completedQuestStore;
     }
@@ -102,6 +104,11 @@ internal sealed class SavedVariablesWatcher : IDisposable
 
     private IEnumerable<string> EnumerateResearchDataFiles()
     {
+        if (_isForever)
+        {
+            return [];
+        }
+
         var accountRoot = Path.Combine(_retailPath, "WTF", "Account");
         if (!Directory.Exists(accountRoot))
         {
@@ -186,7 +193,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
         {
             await ProcessCompletedQuestFileAsync(path, cancellationToken);
         }
-        else
+        else if (!_isForever)
         {
             await ProcessResearchFileAsync(path, cancellationToken);
         }
@@ -209,7 +216,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
     {
         try
         {
-            var result = await _completedQuestStore.ImportFileAsync(path, cancellationToken);
+            var result = await _completedQuestStore.ImportFileAsync(path, cancellationToken, _isForever);
             if (!result.Found)
             {
                 return;
@@ -218,6 +225,12 @@ internal sealed class SavedVariablesWatcher : IDisposable
             CompletedQuestDataProcessed?.Invoke(
                 this,
                 new CompletedQuestDataEventArgs(path, result.Character, result.Realm, result.QuestCount, result.Changed));
+
+            // The repository wire has no game identifier. Keep Forever imports local.
+            if (_isForever)
+            {
+                return;
+            }
 
             // The repository payload contains only the addon's identity-free AQC1
             // wire data. Character and realm stay in the local folder path and

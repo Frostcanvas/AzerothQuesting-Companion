@@ -74,9 +74,9 @@ internal sealed class AddonService
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        if (!WowLocator.IsRetailPath(retailPath))
+        if (!WowLocator.IsSupportedPath(retailPath))
         {
-            throw new InvalidOperationException("The selected folder is not a valid World of Warcraft Retail installation.");
+            throw new InvalidOperationException("The selected folder is not a valid World of Warcraft installation.");
         }
 
         var wowWasRunning = IsWowRunning();
