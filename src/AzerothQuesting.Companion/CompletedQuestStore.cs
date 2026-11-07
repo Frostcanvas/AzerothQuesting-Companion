@@ -96,7 +96,7 @@ internal sealed class CompletedQuestStore
     public async Task<CompletedQuestImportResult> ImportFileAsync(
         string path,
         CancellationToken cancellationToken = default,
-        bool isForever = false)
+        string game = "Retail")
     {
         if (!TryGetCharacterIdentity(path, out var realm, out var character))
         {
@@ -104,10 +104,10 @@ internal sealed class CompletedQuestStore
         }
 
         var text = await File.ReadAllTextAsync(path, cancellationToken);
-        return ImportSnapshot(text, realm, character, isForever);
+        return ImportSnapshot(text, realm, character, game);
     }
 
-    private CompletedQuestImportResult ImportSnapshot(string text, string realm, string character, bool isForever)
+    private CompletedQuestImportResult ImportSnapshot(string text, string realm, string character, string game)
     {
         CompletedQuestCharacterSnapshot? newest = null;
         foreach (Match match in WireRegex.Matches(text))
@@ -124,7 +124,7 @@ internal sealed class CompletedQuestStore
             return new CompletedQuestImportResult(false, false, character, realm, 0);
         }
 
-        newest.IsForever = isForever;
+        newest.Game = game;
         lock (_sync)
         {
             var key = CharacterKey(newest);
@@ -146,7 +146,7 @@ internal sealed class CompletedQuestStore
 
     private static string CharacterKey(CompletedQuestCharacterSnapshot snapshot)
     {
-        var game = snapshot.IsForever ? "Forever" : "Retail";
+        var game = string.IsNullOrEmpty(snapshot.Game) ? (snapshot.IsForever ? "Forever" : "Retail") : snapshot.Game;
         return game + "\0" + snapshot.Realm + "\0" + snapshot.Character;
     }
 
@@ -321,7 +321,7 @@ internal sealed class CompletedQuestStore
                     SafeField(quest.Value),
                     snapshot.CapturedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz"),
                     SafeField(snapshot.AddonVersion),
-                    snapshot.IsForever ? "Forever" : "Retail"));
+                    string.IsNullOrEmpty(snapshot.Game) ? (snapshot.IsForever ? "Forever" : "Retail") : snapshot.Game));
             }
         }
 
@@ -344,6 +344,7 @@ internal sealed class CompletedQuestStore
 
     private sealed class CompletedQuestCharacterSnapshot
     {
+        public string Game { get; set; } = string.Empty;
         public bool IsForever { get; set; }
         public string Character { get; set; } = string.Empty;
         public string Realm { get; set; } = string.Empty;

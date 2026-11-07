@@ -19,12 +19,12 @@ internal sealed class SnapshotQueue
     public async Task<SnapshotResult> EnqueueAsync(
         string sourcePath,
         CancellationToken cancellationToken = default,
-        bool foreverResearchOnly = false)
+        int[]? productIds = null)
     {
         var bytes = await ReadStableFileAsync(sourcePath, cancellationToken);
-        if (foreverResearchOnly)
+        if (productIds is not null)
         {
-            var research = Service01Client.FilterForeverResearch(Encoding.UTF8.GetString(bytes));
+            var research = Service01Client.FilterProductResearch(Encoding.UTF8.GetString(bytes), productIds);
             if (research.Length == 0)
             {
                 return new SnapshotResult(false, sourcePath, null, string.Empty);

@@ -120,16 +120,18 @@ internal sealed class AddonService
                 throw new InvalidDataException("The downloaded package did not contain AzerothQuesting.toc.");
             }
 
-            var isForever = WowLocator.IsForeverPath(retailPath);
-            if (isForever && !File.ReadLines(toc).Any(line =>
-                    line.StartsWith("## Interface:", StringComparison.OrdinalIgnoreCase)
-                    && line[(line.IndexOf(':') + 1)..].Split(',', StringSplitOptions.TrimEntries).Contains("16001")))
+            var client = WowLocator.GetClient(retailPath)!;
+            if (client.TocSuffix.Length > 0)
             {
-                throw new InvalidDataException("This addon release does not support Forever. Select the Beta channel for a Forever-compatible release.");
+                var clientToc = Path.Combine(Path.GetDirectoryName(toc)!, $"AzerothQuesting{client.TocSuffix}.toc");
+                if (!File.Exists(clientToc))
+                {
+                    throw new InvalidDataException($"This addon release does not support {client.Name}. Select the Beta channel for a compatible release.");
+                }
             }
 
             progress?.Report("Preparing addon backup...");
-            var backupRoot = Path.Combine(AppPaths.Backups, DateTime.Now.ToString("yyyyMMdd-HHmmss"), isForever ? "Forever" : "Retail");
+            var backupRoot = Path.Combine(AppPaths.Backups, DateTime.Now.ToString("yyyyMMdd-HHmmss"), client.Folder);
             Directory.CreateDirectory(backupRoot);
 
             var addOnsPath = GetAddOnsPath(retailPath);

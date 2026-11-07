@@ -7,8 +7,8 @@
     <Nullable>enable</Nullable>
     <AssemblyName>AzerothQuestingCompanion</AssemblyName>
     <RootNamespace>AzerothQuesting.Companion</RootNamespace>
-    <Version>0.1.9-beta.15</Version>
-    <FileVersion>0.1.8.20</FileVersion>
+    <Version>0.1.9-beta.16</Version>
+    <FileVersion>0.1.8.21</FileVersion>
     <AssemblyVersion>0.1.9.0</AssemblyVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AzerothQuesting.ico</ApplicationIcon>

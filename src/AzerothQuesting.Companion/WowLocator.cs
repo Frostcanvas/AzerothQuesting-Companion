@@ -40,26 +40,38 @@ internal static class WowLocator
         return candidates.FirstOrDefault(IsForeverPath);
     }
 
-    public static bool IsRetailPath(string? path)
+    public static bool IsClientPath(string? path, WowGameClient client)
     {
         return !string.IsNullOrWhiteSpace(path)
-            && !string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(path)), "_forever_", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(path)), client.Folder, StringComparison.OrdinalIgnoreCase)
             && Directory.Exists(path)
-            && File.Exists(Path.Combine(path, "Wow.exe"))
-            && Directory.Exists(Path.Combine(path, "Interface"));
-    }
-
-    public static bool IsForeverPath(string? path)
-    {
-        return !string.IsNullOrWhiteSpace(path)
-            && string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(path)), "_forever_", StringComparison.OrdinalIgnoreCase)
-            && Directory.Exists(path)
-            && (File.Exists(Path.Combine(path, "Wow.exe"))
-                || File.Exists(Path.Combine(path, "WowForever.exe"))
+            && (Directory.EnumerateFiles(path, "Wow*.exe").Any()
                 || Directory.Exists(Path.Combine(path, "WTF", "Account")));
     }
 
-    public static bool IsSupportedPath(string? path) => IsRetailPath(path) || IsForeverPath(path);
+    public static bool IsRetailPath(string? path) => IsClientPath(path, WowGameClient.All[0]);
+
+    public static bool IsForeverPath(string? path) => IsClientPath(path, WowGameClient.All[1]);
+
+    public static bool IsSupportedPath(string? path) => WowGameClient.All.Any(client => IsClientPath(path, client));
+
+    public static WowGameClient? GetClient(string? path) =>
+        WowGameClient.All.FirstOrDefault(client => IsClientPath(path, client));
+
+    public static string? FindClientPath(WowGameClient client, IEnumerable<string> knownPaths)
+    {
+        var candidates = knownPaths
+            .Select(path => Directory.GetParent(Path.TrimEndingDirectorySeparator(path))?.FullName)
+            .Where(parent => parent is not null)
+            .Select(parent => Path.Combine(parent!, client.Folder))
+            .Concat(GetRegistryCandidates().Select(path => Path.Combine(Path.GetDirectoryName(path)!, client.Folder)))
+            .Concat(new[]
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "World of Warcraft", client.Folder),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "World of Warcraft", client.Folder),
+            });
+        return candidates.FirstOrDefault(path => IsClientPath(path, client));
+    }
 
     private static IEnumerable<string> GetRegistryCandidates()
     {

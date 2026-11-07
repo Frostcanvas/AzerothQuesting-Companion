@@ -35,7 +35,7 @@ internal sealed class MainForm : Form
     private readonly ComboBox _addonTarget = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 120,
+        Width = 160,
     };
     private readonly Label _installedAddonValue = CreateValueLabel("Waiting for WoW path");
     private readonly Label _latestAddonValue = CreateValueLabel("Not checked");
@@ -53,11 +53,10 @@ internal sealed class MainForm : Form
     private readonly Button _syncButton = CreateActionButton("Sync Now", Purple);
     private readonly Button _channelButton = CreateActionButton("Channel: STABLE", Purple);
 
-    private SavedVariablesWatcher? _retailWatcher;
-    private SavedVariablesWatcher? _foreverWatcher;
-    private bool HasWatcher => _retailWatcher is not null || _foreverWatcher is not null;
-    private bool IsForeverTarget => _addonTarget.SelectedIndex == 1;
-    private string? AddonTargetPath => IsForeverTarget ? _settings.WowForeverPath : _settings.WowRetailPath;
+    private readonly Dictionary<string, SavedVariablesWatcher> _watchers = new(StringComparer.OrdinalIgnoreCase);
+    private bool HasWatcher => _watchers.Count > 0;
+    private WowGameClient SelectedClient => (WowGameClient)_addonTarget.SelectedItem!;
+    private string? AddonTargetPath => _settings.WowClientPaths.GetValueOrDefault(SelectedClient.Folder);
     private NotifyIcon? _notifyIcon;
     private bool _exitRequested;
     private bool _busy;
@@ -96,8 +95,10 @@ internal sealed class MainForm : Form
         FormClosing += OnFormClosing;
         FormClosed += (_, _) =>
         {
-            _retailWatcher?.Dispose();
-            _foreverWatcher?.Dispose();
+            foreach (var watcher in _watchers.Values)
+            {
+                watcher.Dispose();
+            }
             _notifyIcon?.Dispose();
             _updateCheckTimer.Stop();
             _updateCheckTimer.Dispose();
@@ -179,7 +180,7 @@ internal sealed class MainForm : Form
         layout.Controls.Add(CreateNavButton("Addon", (_, _) => _installButton.Focus()), 0, 2);
         layout.Controls.Add(CreateNavButton("Sync", async (_, _) => await SyncNowAsync(scanFirst: true)), 0, 3);
         layout.Controls.Add(CreateNavButton("Data", (_, _) => OpenResearchData()), 0, 4);
-        layout.Controls.Add(CreateNavButton("Settings", async (_, _) => await BrowseForWowAsync(IsForeverTarget)), 0, 5);
+        layout.Controls.Add(CreateNavButton("Settings", async (_, _) => await BrowseForWowAsync()), 0, 5);
         layout.Controls.Add(CreateNavButton("Mail", (_, _) => OpenMailReminders()), 0, 6);
 
         var footer = new Label
@@ -390,9 +391,11 @@ internal sealed class MainForm : Form
         var panel = CreateSurfacePanel();
         panel.Margin = new Padding(0, 12, 0, 0);
 
+        panel.AutoScroll = true;
         var layout = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            AutoSize = true,
             ColumnCount = 1,
             RowCount = 5,
             Padding = new Padding(18, 12, 18, 12),
@@ -405,7 +408,7 @@ internal sealed class MainForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         layout.Controls.Add(CreateSectionTitle("World of Warcraft"), 0, 0);
-        _wowPathValue.MaximumSize = new Size(850, 42);
+        _wowPathValue.MaximumSize = new Size(850, 0);
         layout.Controls.Add(_wowPathValue, 0, 1);
 
         var buttons = new FlowLayoutPanel
@@ -417,11 +420,9 @@ internal sealed class MainForm : Form
         };
         var detect = CreateSecondaryButton("Detect WoW");
         detect.Click += async (_, _) => await DetectWowAsync();
-        var browse = CreateSecondaryButton("Browse Retail...");
-        browse.Click += async (_, _) => await BrowseForWowAsync(false);
-        var browseForever = CreateSecondaryButton("Browse Forever...");
-        browseForever.Click += async (_, _) => await BrowseForWowAsync(true);
-        _addonTarget.Items.AddRange(["Retail", "Forever"]);
+        var browse = CreateSecondaryButton("Browse Selected Game...");
+        browse.Click += async (_, _) => await BrowseForWowAsync();
+        _addonTarget.Items.AddRange(WowGameClient.All.Cast<object>().ToArray());
         _addonTarget.SelectedIndex = 0;
         _addonTarget.SelectedIndexChanged += async (_, _) =>
         {
@@ -447,7 +448,6 @@ internal sealed class MainForm : Form
         syncNow.Click += async (_, _) => await SyncNowAsync(scanFirst: true);
         buttons.Controls.Add(detect);
         buttons.Controls.Add(browse);
-        buttons.Controls.Add(browseForever);
         buttons.Controls.Add(_addonTarget);
         buttons.Controls.Add(addOns);
         buttons.Controls.Add(data);
@@ -588,11 +588,14 @@ internal sealed class MainForm : Form
         {
             AddActivity($"Companion {GetClientVersion()} started.");
             CheckMailReminders();
-            // Migrate a Forever folder saved by the earlier single-path beta.
-            if (WowLocator.IsForeverPath(_settings.WowRetailPath))
+            _settings.WowClientPaths ??= new(StringComparer.OrdinalIgnoreCase);
+            foreach (var legacyPath in new[] { _settings.WowRetailPath, _settings.WowForeverPath })
             {
-                _settings.WowForeverPath ??= _settings.WowRetailPath;
-                _settings.WowRetailPath = null;
+                var client = WowLocator.GetClient(legacyPath);
+                if (client is not null)
+                {
+                    _settings.WowClientPaths.TryAdd(client.Folder, legacyPath!);
+                }
             }
 
             await DetectWowAsync();
@@ -615,27 +618,34 @@ internal sealed class MainForm : Form
 
         try
         {
-            var retail = _settings.WowRetailPath;
-            if (!WowLocator.IsRetailPath(retail))
+            var retail = await Task.Run(WowLocator.FindRetailPath);
+            var known = _settings.WowClientPaths.Values
+                .Concat(retail is null ? [] : new[] { retail })
+                .Where(Directory.Exists)
+                .ToList();
+
+            foreach (var client in WowGameClient.All)
             {
-                retail = await Task.Run(WowLocator.FindRetailPath);
+                var path = _settings.WowClientPaths.GetValueOrDefault(client.Folder);
+                if (!WowLocator.IsClientPath(path, client))
+                {
+                    path = await Task.Run(() => WowLocator.FindClientPath(client, known));
+                }
+
+                SetGamePath(path, client);
+                if (path is not null)
+                {
+                    known.Add(path);
+                }
             }
 
-            var forever = _settings.WowForeverPath;
-            if (!WowLocator.IsForeverPath(forever))
+            if (AddonTargetPath is null && _watchers.Count > 0)
             {
-                forever = await Task.Run(() => WowLocator.FindForeverPath(retail));
-            }
-
-            SetGamePath(retail, forever: false);
-            SetGamePath(forever, forever: true);
-            if (retail is null && forever is not null)
-            {
-                _addonTarget.SelectedIndex = 1;
+                _addonTarget.SelectedItem = WowGameClient.All.First(client => _watchers.ContainsKey(client.Folder));
             }
 
             await RefreshGamePathsAsync();
-            SetStatus(HasWatcher ? "WoW paths loaded. Quest scans use both configured locations." : "Use Browse Retail or Browse Forever to select a game folder.");
+            SetStatus(HasWatcher ? "WoW paths loaded. Quest scans use all configured locations." : "Select a game and use Browse Selected Game.");
         }
         finally
         {
@@ -643,7 +653,7 @@ internal sealed class MainForm : Form
         }
     }
 
-    private async Task BrowseForWowAsync(bool forever)
+    private async Task BrowseForWowAsync()
     {
         if (!TryBeginBusy("Selecting a World of Warcraft game folder..."))
         {
@@ -652,7 +662,8 @@ internal sealed class MainForm : Form
 
         try
         {
-            var folder = forever ? "_forever_" : "_retail_";
+            var client = SelectedClient;
+            var folder = client.Folder;
             using var dialog = new FolderBrowserDialog
             {
                 Description = $"Select the {folder} game folder.",
@@ -660,7 +671,7 @@ internal sealed class MainForm : Form
                 ShowNewFolderButton = false,
             };
 
-            var previous = forever ? _settings.WowForeverPath : _settings.WowRetailPath;
+            var previous = _settings.WowClientPaths.GetValueOrDefault(client.Folder);
             if (Directory.Exists(previous))
             {
                 dialog.InitialDirectory = previous!;
@@ -671,17 +682,20 @@ internal sealed class MainForm : Form
                 return;
             }
 
-            var candidate = NormalizeGameSelection(dialog.SelectedPath, forever);
+            var candidate = NormalizeGameSelection(dialog.SelectedPath, client);
             if (candidate is null)
             {
                 MessageBox.Show(this, $"Select a valid {folder} game folder.", "Azeroth Questing Companion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            SetGamePath(candidate, forever);
-            _addonTarget.SelectedIndex = forever ? 1 : 0;
+            SetGamePath(candidate, client);
+            foreach (var other in WowGameClient.All.Where(other => !_watchers.ContainsKey(other.Folder)))
+            {
+                SetGamePath(WowLocator.FindClientPath(other, [candidate]), other);
+            }
             await RefreshGamePathsAsync();
-            SetStatus($"{_addonTarget.Text} path saved. Quest scans use both configured locations.");
+            SetStatus($"{_addonTarget.Text} path saved. Quest scans use all configured locations.");
         }
         finally
         {
@@ -689,37 +703,35 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void SetGamePath(string? path, bool forever)
+    private void SetGamePath(string? path, WowGameClient client)
     {
-        ref var watcher = ref (forever ? ref _foreverWatcher : ref _retailWatcher);
-        watcher?.Dispose();
-        watcher = null;
-
-        if (forever)
+        if (_watchers.Remove(client.Folder, out var previous))
         {
-            _settings.WowForeverPath = path;
-        }
-        else
-        {
-            _settings.WowRetailPath = path;
+            previous.Dispose();
         }
 
         if (path is null)
         {
+            _settings.WowClientPaths.Remove(client.Folder);
             return;
         }
 
-        watcher = new SavedVariablesWatcher(path, _snapshotQueue, _completedQuestStore);
+        _settings.WowClientPaths[client.Folder] = Path.GetFullPath(path);
+        var watcher = new SavedVariablesWatcher(path, _snapshotQueue, _completedQuestStore);
         watcher.SnapshotProcessed += WatcherOnSnapshotProcessed;
         watcher.CompletedQuestDataProcessed += WatcherOnCompletedQuestDataProcessed;
         watcher.WatcherError += WatcherOnError;
         watcher.Start();
+        _watchers[client.Folder] = watcher;
     }
 
     private async Task RefreshGamePathsAsync()
     {
+        _settings.WowRetailPath = _settings.WowClientPaths.GetValueOrDefault("_retail_");
+        _settings.WowForeverPath = _settings.WowClientPaths.GetValueOrDefault("_forever_");
         SettingsService.Save(_settings);
-        _wowPathValue.Text = $"Retail: {_settings.WowRetailPath ?? "Not configured"}\nForever: {_settings.WowForeverPath ?? "Not configured"}";
+        _wowPathValue.Text = string.Join("\n", WowGameClient.All.Select(client =>
+            $"{client.Name}: {_settings.WowClientPaths.GetValueOrDefault(client.Folder) ?? "Not configured"}"));
         _scanButton.Enabled = HasWatcher;
         await ScanGamePathsAsync();
         RefreshLocalStatus();
@@ -729,7 +741,7 @@ internal sealed class MainForm : Form
 
     private async Task ScanGamePathsAsync()
     {
-        foreach (var watcher in new[] { _retailWatcher, _foreverWatcher })
+        foreach (var watcher in _watchers.Values)
         {
             if (watcher is not null)
             {
@@ -1225,16 +1237,15 @@ internal sealed class MainForm : Form
         });
     }
 
-    private static string? NormalizeGameSelection(string selectedPath, bool forever)
+    private static string? NormalizeGameSelection(string selectedPath, WowGameClient client)
     {
-        Func<string?, bool> isGamePath = forever ? WowLocator.IsForeverPath : WowLocator.IsRetailPath;
-        if (isGamePath(selectedPath))
+        if (WowLocator.IsClientPath(selectedPath, client))
         {
             return Path.GetFullPath(selectedPath);
         }
 
-        var child = Path.Combine(selectedPath, forever ? "_forever_" : "_retail_");
-        return isGamePath(child) ? Path.GetFullPath(child) : null;
+        var child = Path.Combine(selectedPath, client.Folder);
+        return WowLocator.IsClientPath(child, client) ? Path.GetFullPath(child) : null;
     }
 
     private bool TryBeginBusy(string message)

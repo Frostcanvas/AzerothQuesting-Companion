@@ -35,7 +35,7 @@ internal sealed class CompletedQuestDataEventArgs : EventArgs
 internal sealed class SavedVariablesWatcher : IDisposable
 {
     private readonly string _retailPath;
-    private readonly bool _isForever;
+    private readonly WowGameClient _client;
     private readonly SnapshotQueue _queue;
     private readonly CompletedQuestStore _completedQuestStore;
     private readonly CompletedQuestRepositoryQueue _completedQuestRepositoryQueue = new();
@@ -47,7 +47,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
     public SavedVariablesWatcher(string retailPath, SnapshotQueue queue, CompletedQuestStore completedQuestStore)
     {
         _retailPath = retailPath;
-        _isForever = WowLocator.IsForeverPath(retailPath);
+        _client = WowLocator.GetClient(retailPath) ?? throw new ArgumentException("Unsupported game folder.", nameof(retailPath));
         _queue = queue;
         _completedQuestStore = completedQuestStore;
     }
@@ -198,7 +198,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
     {
         try
         {
-            var result = await _queue.EnqueueAsync(path, cancellationToken, foreverResearchOnly: _isForever);
+            var result = await _queue.EnqueueAsync(path, cancellationToken, productIds: _client.ProductIds);
             SnapshotProcessed?.Invoke(this, new SnapshotQueuedEventArgs(path, result.Queued, result.Hash));
         }
         catch (Exception ex)
@@ -211,7 +211,7 @@ internal sealed class SavedVariablesWatcher : IDisposable
     {
         try
         {
-            var result = await _completedQuestStore.ImportFileAsync(path, cancellationToken, _isForever);
+            var result = await _completedQuestStore.ImportFileAsync(path, cancellationToken, _client.Name);
             if (!result.Found)
             {
                 return;
@@ -221,8 +221,8 @@ internal sealed class SavedVariablesWatcher : IDisposable
                 this,
                 new CompletedQuestDataEventArgs(path, result.Character, result.Realm, result.QuestCount, result.Changed));
 
-            // The repository wire has no game identifier. Keep Forever imports local.
-            if (_isForever)
+            // The repository wire has no game identifier. Keep non-Retail completed-quest imports local.
+            if (_client.Folder != "_retail_")
             {
                 return;
             }

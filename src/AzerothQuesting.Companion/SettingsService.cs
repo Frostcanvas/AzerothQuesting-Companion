@@ -24,6 +24,7 @@ internal static class UpdateChannelSettings
 
 internal sealed class CompanionSettings
 {
+    public Dictionary<string, string> WowClientPaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string? WowRetailPath { get; set; }
     public string? WowForeverPath { get; set; }
     public bool ServiceSyncEnabled { get; set; } = true;

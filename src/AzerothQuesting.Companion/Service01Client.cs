@@ -564,18 +564,18 @@ internal sealed partial class Service01Client : IDisposable
         return value.TrimEnd('/');
     }
 
-    internal static string FilterForeverResearch(string snapshot)
+    internal static string FilterProductResearch(string snapshot, int[] productIds)
     {
-        const string foreverKeyPrefix = "wp18-";
+        var prefixes = productIds.Select(id => $"wp{id}-").ToArray();
 
         var records = WireRecordRegex().Matches(snapshot)
             .Concat(MapWireRecordRegex().Matches(snapshot))
             .Select(match => match.Value)
-            .Where(wire => wire.AsSpan(5).StartsWith(foreverKeyPrefix, StringComparison.Ordinal))
+            .Where(wire => prefixes.Any(prefix => wire.AsSpan(5).StartsWith(prefix, StringComparison.Ordinal)))
             .Distinct(StringComparer.Ordinal);
         var filtered = string.Join("\n", records);
 
-        // Keep Forever on the structured upload path. Raw SavedVariables and
+        // Keep each client on the structured upload path. Raw SavedVariables and
         // unpartitioned records must never reach the shared research queue.
         return ExtractWireObservations(filtered).Count > 0 || ExtractMapWireObservations(filtered).Count > 0
             ? filtered

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9 Beta 16 - November 7, 2026 - Prepared for Beta testing
+
+- **Added** saved locations, sibling-folder detection, addon installation, and simultaneous SavedVariables scans for Retail, Forever, Classic Era, Anniversary, and Mists Classic. Select the game before browsing or installing.
+- **Separated** completed-quest caches and TSV game labels for all five clients, including migration of older Retail/Forever caches and settings.
+- **Filtered** research uploads by each client's allowed Blizzard product IDs. Personal completed-quest contributions from non-Retail clients remain local because their wire format has no game identifier.
+- **Compatibility:** Addon 0.3.0 Beta 33 supplies the Classic collection manifests. Live client and server validation pending.
+
+
 ## 0.1.9 Beta 15 - November 6, 2026 - GitHub Pre-release
 
 - **Added** upload of anonymous Forever quest and map observations tagged with Blizzard product ID 18. These records populate the separate product 18 partition on a server that supports product-based research.
